@@ -52,6 +52,7 @@ import com.t4kash.app.ui.model.TaskDto
 import com.t4kash.app.ui.theme.T4AmberContainer
 import com.t4kash.app.ui.theme.T4Background
 import com.t4kash.app.ui.theme.T4Border
+import com.t4kash.app.ui.theme.T4Danger
 import com.t4kash.app.ui.theme.T4Mint
 import com.t4kash.app.ui.theme.T4MintDark
 import com.t4kash.app.ui.theme.T4PrimaryContainer
@@ -287,7 +288,7 @@ private fun PublicationCard(
                 PublicationValue(
                     icon = Icons.Filled.Payments,
                     label = "Presupuesto",
-                    value = "$${"%.2f".format(task.presupuesto)}",
+                    value = "C\$ ${"%.2f".format(task.presupuesto)}",
                     modifier = Modifier.weight(1f)
                 )
                 PublicationValue(
@@ -415,13 +416,15 @@ private fun PublicationDateRow(
 private fun publicationSummary(tasks: List<TaskDto>): String {
     val active = tasks.count { it.estadoTarea.equals("PUBLICADA", ignoreCase = true) }
     val assigned = tasks.count { it.estadoTarea.equals("ASIGNADA", ignoreCase = true) }
-    return "$active activas · $assigned asignadas"
+    val closed = tasks.count { it.estadoTarea.equals("CERRADA", ignoreCase = true) }
+    return "$active activas · $assigned asignadas · $closed cerradas"
 }
 
 private fun publicationStatusColors(status: String): Pair<Color, Color> {
     return when (status.uppercase()) {
         "PUBLICADA" -> T4Mint to T4MintDark
         "ASIGNADA" -> T4PrimaryContainer to T4PrimaryDark
+        "CERRADA" -> Color(0xFFFFE4E4) to T4Danger
         else -> T4AmberContainer to T4Text
     }
 }
@@ -437,6 +440,9 @@ private fun String?.toDisplayDate(): String {
 private fun TaskDto.deadlineSummary(): String {
     if (estadoTarea.equals("ASIGNADA", ignoreCase = true)) {
         return "Trabajo asignado"
+    }
+    if (estadoTarea.equals("CERRADA", ignoreCase = true)) {
+        return "Postulaciones cerradas"
     }
     val deadline = parseApiDate(fechaLimitePostulacion ?: fechaLimite)
         ?: return "Sin cierre programado"
@@ -470,7 +476,8 @@ private enum class PublicationFilter(
 ) {
     ALL("Todas", null),
     ACTIVE("Activas", "PUBLICADA"),
-    ASSIGNED("Asignadas", "ASIGNADA");
+    ASSIGNED("Asignadas", "ASIGNADA"),
+    CLOSED("Cerradas", "CERRADA");
 
     companion object {
         fun fromRoute(route: String): PublicationFilter {
