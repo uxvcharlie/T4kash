@@ -9,6 +9,7 @@
     <a href="#control-de-versiones"><img src="https://img.shields.io/badge/Commits-Conventional-191919" alt="Conventional Commits"></a>
   </p>
   <p>
+    <a href="https://charlieuxv.github.io/t4kash-landing/">Landing</a> ·
     <a href="https://t4k4sh.onrender.com/api/health">API</a> ·
     <a href="https://t4k4sh.onrender.com/swagger-ui/index.html">Swagger</a> ·
     <a href="https://www.figma.com/design/k5PeSZUFQJgIja3Mw2BpAw/Sin-t%C3%ADtulo?node-id=0-1">Figma</a>
@@ -200,6 +201,9 @@ T4k4sh/
 ├── database/
 │   ├── schema-postgresql.sql  Esquema oficial
 │   └── sqlserver-original.sql Referencia histórica
+├── landing/
+│   ├── web/                   Página pública: React, TypeScript y Tailwind
+│   └── README.md              Cómo compilarla y dónde se publica
 ├── docs/
 │   ├── capturas/              Evidencia visual actual
 │   └── diagramas/             ERD y UML

@@ -38,3 +38,13 @@ ios/**/*.xcuserstate
 ios/build/
 ios/DerivedData/
 *.xcworkspace/xcuserdata/
+
+# Landing: acá vive el código; el resultado del build se publica desde
+# https://github.com/Charlieuxv/t4kash-landing
+landing/web/node_modules/
+landing/assets/
+landing/media/
+landing/index.html
+landing/robots.txt
+landing/sitemap.xml
+landing/.nojekyll

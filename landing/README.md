@@ -1,78 +1,133 @@
 # Landing de T4KASH
 
-Página estática de una sola pieza. Sin build ni dependencias: `index.html` contiene el
-HTML, el CSS y el JS. Las tipografías se cargan desde Google Fonts.
+Página pública de T4KASH: <https://charlieuxv.github.io/t4kash-landing/>
 
-## Ver en local
+Construida con **React + TypeScript + Tailwind CSS** sobre Vite. El código fuente
+vive en `web/` y el resultado del build queda al lado, en esta misma carpeta.
+
+## Dónde vive y dónde se publica
+
+Acá vive **el código** de la página, para que el sitio y la aplicación que muestra
+viajen juntos en el mismo repositorio.
+
+Lo que sirve GitHub Pages es un repositorio aparte:
+
+| | |
+|---|---|
+| Repositorio publicado | <https://github.com/Charlieuxv/t4kash-landing> |
+| Sitio en vivo | <https://charlieuxv.github.io/t4kash-landing/> |
+
+El resultado del build (`index.html`, `assets/`, `media/`) **no se versiona acá**:
+está en el `.gitignore` de la raíz. Si se guardara, cada compilación dejaría una
+copia nueva de los archivos con hash y del video de 2,8 MB, y el repositorio
+crecería sin necesidad. Para actualizar el sitio en vivo se compila y se copia al
+repositorio publicado:
 
 ```bash
-cd landing
-python3 -m http.server 8099
-# http://localhost:8099
+# desde la raíz de T4k4sh, con el otro repositorio clonado al lado
+cd landing/web && npm run build && cd ../..
+rsync -a --exclude node_modules --exclude .git landing/ ../t4kash-landing/
+cd ../t4kash-landing && git add -A && git commit -m "..." && git push
 ```
 
-## Publicar en GitHub Pages
+## Estructura
 
-Settings → Pages → Source: `main`, carpeta `/landing`.
+```
+landing/
+  web/
+    src/
+      components/ Button, Logo, Pattern, Reveal, Ui
+      sections/   Una por sección de la página
+      layouts/    Navbar y Footer
+      data/       Todo el texto y la lista de capturas
+      hooks/      useReveal (scroll-reveal con IntersectionObserver)
+      assets/     Capturas de la app y logotipo, en WebP
+    public/media/ Video demo, imagen Open Graph, iconos
+```
 
-## Origen de cada dato de la página
+Al compilar aparecen además `index.html`, `assets/` y `media/` dentro de
+`landing/`. No se versionan; son el material que se copia al repositorio
+publicado.
 
-Todo el contenido sale del código de la rama `Carlos`, no de supuestos.
+## Si la URL cambia
+
+La dirección del sitio está escrita a mano en cuatro lugares. Si el repositorio
+se mueve de cuenta o se le pone un dominio propio, hay que tocar los cuatro:
+
+- `landing/web/index.html` — `canonical`, `og:url`, `og:image`, `twitter:image` y el JSON-LD
+- `landing/web/public/sitemap.xml`
+- `landing/web/public/robots.txt`
+- este README y el enlace del README principal
+
+## Trabajar en local
+
+```bash
+cd landing/web
+npm install
+npm run dev      # http://localhost:5173
+```
+
+## Publicar
+
+```bash
+cd landing/web
+npm run build    # limpia ../assets y escribe el bundle en landing/
+```
+
+El build deja `index.html`, `assets/` y `media/` en `landing/`, sin versionar.
+Para que llegue al sitio en vivo hay que copiarlo al repositorio publicado, como
+se explica más arriba.
+
+## Sistema visual
+
+Sale del *Manual de Identidad Visual de T4KASH*, no de una interpretación libre.
+
+| Elemento | Origen |
+|---|---|
+| `#191919`, `#C1FF72`, `#5749FD`, `#0A74FF`, `#FFFFFF` | Página «Paleta de colores» |
+| Texto negro sobre lima y sobre azul; texto blanco sobre morado y sobre tinta | Página «Contraste y accesibilidad (WCAG AA)» |
+| Textura de cuadrícula | Página «Patrones y texturas» |
+| Patrón modular (cuartos de círculo, cápsulas, triángulos) | Página «Patrones y texturas» |
+| Codos redondeados tono sobre tono | Página «Contrastes» |
+| Esquina achaflanada de los paneles | Recurso recurrente del manual |
+| Logotipo e isotipo | Extraídos del PDF del manual |
+
+**Tipografías.** El manual usa **Cosmic Octo** para títulos y **Codec Pro / Futura**
+para texto. Las dos son comerciales y su licencia no cubre redistribución como
+webfont, así que la página usa **Rubik 900** y **Outfit** como sustitutas medidas
+contra las originales. Los stacks ya piden primero las de marca y `src/index.css`
+tiene los `@font-face` listos y comentados: en cuanto existan los `.woff2` con
+licencia web, se descomentan y no hay que tocar nada más.
+
+## De dónde sale cada dato
+
+Nada de la página está inventado. Los números y las afirmaciones salen del código
+de este mismo repositorio o de las capturas reales de la aplicación.
 
 | Dato en la página | Origen |
 |---|---|
-| Comisión total 15 %: 10 % al cliente + 5 % retenido al estudiante | `PaymentService.java` (`clientFeePercent` / `studentFeePercent`), `application.properties` |
-| Referencia de mercado 20 %–30 % | «revision mejorada plan presupuestal.xlsx», hoja *Valor Diferenciado* |
-| El cliente paga el precio acordado + su 10 % | `total = agreedAmount + clientFee + processorFee + processorTax` |
-| El estudiante recibe el precio acordado − su 5 % | `studentAmount = agreedAmount - studentFee` |
-| Comisión 0 % en efectivo | `cash ? BigDecimal.ZERO : ...` en ambos porcentajes |
-| Moneda NIO | `schema-postgresql.sql` (`moneda_cobro DEFAULT 'NIO'`) |
-| Estados `PENDIENTE_PAGO`, `FONDOS_RETENIDOS`, `PAGO_LIBERADO` | `finance/service/PaymentService.java` |
-| 92 endpoints REST | mapeos `@*Mapping` en `backend/src/main/java` (12 controladores) |
-| 54 tablas | `CREATE TABLE` en `database/schema-postgresql.sql` |
-| 131 pruebas: 108 backend + 23 Android | `@Test` en `backend/src/test` y `mobile/app/src/test` |
-| Calificación mutua de 1 a 5 | `CalificacionService`, tabla `calificaciones`, `RatingActions.kt` |
-| Código 10 min, 60 s entre reenvíos, 5 intentos/15 min | README principal, Inicio de Sesión en Dos Pasos |
-| Radio 250 m – 5 km, tope C$ 1,000, doble confirmación | README principal, Uso del MVP |
-| 24 categorías | catálogo `categorias_tarea` de `schema-postgresql.sql` |
-| Radio máximo de búsqueda 50 km | README principal, Uso del MVP |
-| Android 7.0+ (`minSdk 24`) | `mobile/app/build.gradle.kts` |
-| Capturas de inicio, wallet y chat | `docs/capturas/` de la rama `ios-clean`, incrustadas como WebP en base64 |
+| 24 categorías | Contador visible en la pantalla de inicio de la app |
+| Vigencia de 24 h y tope de C$ 1,000 en tareas rápidas | README del producto, sección «Uso del MVP» |
+| Radio de búsqueda configurable | Pantalla de tareas rápidas |
+| Comisión: 10 % al cliente + 5 % al estudiante | `PaymentService.java` y `application.properties` |
+| 0 % de comisión en efectivo | `cash ? BigDecimal.ZERO : ...` en `PaymentService` |
+| Moneda NIO | `schema-postgresql.sql` |
+| «Pago protegido» | Es el nombre que usa la propia app |
+| Calificación mutua de 1 a 5 | `CalificacionService` y tabla `calificaciones` |
+| Android 7.0+ | `minSdk 24` en `mobile/app/build.gradle.kts` |
+| Pagadito en entorno de pruebas | Integración en Sandbox, declarada como tal |
+| Notificaciones push en integración | Rama separada, declarado como tal |
+| Capturas y video | Aplicación funcionando, sin retoques de interfaz |
 
-## Pendientes de contenido
+Dos capturas se editaron **solo para quitar datos personales**, sin cambiar nada
+de la interfaz: en la pantalla de acceso se vació el campo de correo, y del perfil
+se recortó el bloque «Cuenta», que mostraba un correo real y el nombre de una
+universidad.
 
-- El CTA apunta a `github.com/Renesls/T4k4sh/releases`. Cambiar por el enlace directo
-  del APK cuando exista el release.
-- **La app todavía muestra «Servicio T4KASH 1.0 %».** `WalletScreen.kt` imprime
-  `porcentajeComisionPlataforma`, que ahora vale 15.00 y corresponde a la suma de los dos
-  lados. Para el estudiante conviene mostrar solo su 5 %, así que ese texto necesita
-  revisión aparte.
-- El radar de tareas rápidas sigue reconstruido en HTML/CSS. La captura
-  `docs/capturas/tareas-rapidas.png` **no se puede usar**: muestra el estado vacío con el
-  error «Tu cuenta no tiene permiso para realizar esta accion» y el mapa del emulador
-  (Mountain View, California).
-- La landing no enlaza el Swagger (`t4k4sh.onrender.com/swagger-ui/index.html`) ni corrige
-  el enlace del pie a `t4k4sh.onrender.com/api/`, que no es una página navegable.
-- Las cifras de la sección «Plataforma» son las de la rama `Carlos`. En `ios-clean` hay
-  además una app iOS completa (26 vistas, 60 pruebas) y el esquema llega a 54 tablas; esas
-  ramas todavía no están integradas.
+## Lo que la página no dice
 
-## Identidad visual
-
-| Elemento | Valor | Origen |
-|---|---|---|
-| Azul de marca | `#0A74FF` | `mobile/app/src/main/res/drawable-nodpi/t4kash_logo.png` |
-| Tinta | `#191919` | logotipo y `ui/theme/Color.kt` |
-| Índigo de producto | `#5749FD` | `ui/theme/Color.kt` (solo dentro de las pantallas) |
-| Menta | `#B9FF66` | `ui/theme/Color.kt` (dinero y confirmaciones) |
-
-El logotipo usa `#0A74FF` y la app usa `#5749FD`: el azul es el color de **marca** y el
-índigo el color de **producto** (solo dentro de las pantallas). La regla completa, con
-contrastes y uso del logotipo, está en [`docs/MANUAL_DE_MARCA.md`](../docs/MANUAL_DE_MARCA.md).
-
-Para texto azul sobre fondo claro se usa `#0053C7` (`--blue-deep`): `#0A74FF` sobre blanco
-da 4.24:1 y no alcanza el 4.5:1 que pide WCAG AA para texto normal.
-
-## Tipografía
-
-Archivo (títulos) · Public Sans (texto) · JetBrains Mono (montos, estados y etiquetas).
+- No promete ingresos ni cantidad de oportunidades.
+- No presenta Pagadito como dinero real.
+- No presenta las notificaciones push como terminadas.
+- No nombra universidades ni sugiere convenios con ninguna.
+- No inventa usuarios, montos procesados, testimonios ni clientes.
