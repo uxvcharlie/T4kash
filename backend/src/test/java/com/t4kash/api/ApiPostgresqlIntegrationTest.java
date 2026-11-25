@@ -3,6 +3,7 @@ package com.t4kash.api;
 import com.t4kash.api.identity.service.VerificationEmailService;
 import com.t4kash.api.network.entity.Publicacion;
 import com.t4kash.api.network.repository.PublicacionRepository;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -209,6 +210,65 @@ class ApiPostgresqlIntegrationTest {
     }
 
     @Test
+    void exactTaskLocationIsOnlyVisibleToTheOwnerAndTheAssignedStudent() throws Exception {
+        Session owner = registerAndLogIn("cliente.ubicacion@gmail.com");
+        Session outsider = registerAndLogIn("curioso.ubicacion@gmail.com");
+        Session student = registerAndLogIn(
+                "estudiante.ubicacion@uni.edu.ni",
+                ",\"idUniversidad\":3,\"idCarrera\":33"
+        );
+        String created = mockMvc.perform(post("/api/tasks")
+                        .header(HttpHeaders.AUTHORIZATION, owner.bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"titulo":"Llevar un paquete","descripcion":"Entrega en el barrio",
+                                 "presupuesto":300,"idCategoria":1,"tipoOportunidad":"RAPIDA",
+                                 "modalidad":"PRESENCIAL","direccionReferencia":"Casa azul frente al parque",
+                                 "latitud":12.136412,"longitud":-86.251437}
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        Integer taskId = JsonPath.read(created, "$.idTarea");
+
+        // Sin sesion y con la sesion de otra persona: zona aproximada, sin direccion.
+        for (String bearer : new String[] {null, outsider.bearer()}) {
+            var request = get("/api/tasks/{id}", taskId);
+            if (bearer != null) {
+                request.header(HttpHeaders.AUTHORIZATION, bearer);
+            }
+            mockMvc.perform(request)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.direccionReferencia").doesNotExist())
+                    .andExpect(jsonPath("$.latitud").value(12.135))
+                    .andExpect(jsonPath("$.longitud").value(-86.25));
+        }
+        mockMvc.perform(get("/api/tasks").queryParam("size", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idTarea == %d)].direccionReferencia".formatted(taskId))
+                        .value(Matchers.contains(Matchers.nullValue())))
+                .andExpect(jsonPath("$[?(@.idTarea == %d)].latitud".formatted(taskId))
+                        .value(Matchers.contains(12.135)));
+
+        mockMvc.perform(get("/api/tasks/{id}", taskId).header(HttpHeaders.AUTHORIZATION, owner.bearer()))
+                .andExpect(jsonPath("$.direccionReferencia").value("Casa azul frente al parque"))
+                .andExpect(jsonPath("$.latitud").value(12.136412));
+        mockMvc.perform(get("/api/tasks/{id}", taskId).header(HttpHeaders.AUTHORIZATION, student.bearer()))
+                .andExpect(jsonPath("$.direccionReferencia").doesNotExist());
+
+        jdbcTemplate.update(
+                "INSERT INTO trabajos_asignados (id_tarea, id_estudiante) VALUES (?, ?)",
+                taskId,
+                student.userId()
+        );
+        mockMvc.perform(get("/api/tasks/{id}", taskId).header(HttpHeaders.AUTHORIZATION, student.bearer()))
+                .andExpect(jsonPath("$.direccionReferencia").value("Casa azul frente al parque"))
+                .andExpect(jsonPath("$.longitud").value(-86.251437));
+
+        mockMvc.perform(get("/api/tasks/{id}", taskId).header(HttpHeaders.AUTHORIZATION, "Bearer token-falso"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void marketplaceListsRemainBounded() throws Exception {
         mockMvc.perform(get("/api/tasks")
                         .queryParam("page", "0")
@@ -291,11 +351,16 @@ class ApiPostgresqlIntegrationTest {
 
     /** Registra una cuenta de cliente por la API, la verifica y devuelve su sesion. */
     private Session registerAndLogIn(String correo) throws Exception {
+        return registerAndLogIn(correo, "");
+    }
+
+    /** {@code extraFields} se agrega al JSON del registro (por ejemplo, universidad y carrera). */
+    private Session registerAndLogIn(String correo, String extraFields) throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"nombre":"Prueba","apellido":"Integracion","correo":"%s","password":"Clave12345"}
-                                """.formatted(correo)))
+                                {"nombre":"Prueba","apellido":"Integracion","correo":"%s","password":"Clave12345"%s}
+                                """.formatted(correo, extraFields)))
                 .andExpect(status().isCreated());
         ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
         verify(emailService).sendCode(eq(correo), code.capture(), anyInt());

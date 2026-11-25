@@ -14,4 +14,11 @@ import java.lang.annotation.Target;
 @Target(ElementType.PARAMETER)
 public @interface CurrentUser {
     String role() default "";
+
+    /**
+     * Con {@code false}, una peticion sin encabezado Authorization recibe
+     * {@code null} en lugar de un 401. Un token presente pero invalido sigue
+     * siendo rechazado.
+     */
+    boolean required() default true;
 }

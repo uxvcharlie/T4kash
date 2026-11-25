@@ -32,7 +32,11 @@ public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolve
             WebDataBinderFactory binderFactory
     ) {
         String authorization = webRequest.getHeader(HttpHeaders.AUTHORIZATION);
-        String role = parameter.getParameterAnnotation(CurrentUser.class).role();
+        CurrentUser annotation = parameter.getParameterAnnotation(CurrentUser.class);
+        if (!annotation.required() && (authorization == null || authorization.isBlank())) {
+            return null;
+        }
+        String role = annotation.role();
         return role.isBlank()
                 ? authenticatedUserService.requireUser(authorization)
                 : authenticatedUserService.requireRole(authorization, role);

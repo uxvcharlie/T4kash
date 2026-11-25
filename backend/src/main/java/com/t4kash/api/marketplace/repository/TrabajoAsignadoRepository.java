@@ -7,11 +7,23 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 public interface TrabajoAsignadoRepository extends JpaRepository<TrabajoAsignado, Integer> {
     Optional<TrabajoAsignado> findByIdTarea(Integer idTarea);
+
+    @Query("""
+            SELECT trabajo.idTarea
+            FROM TrabajoAsignado trabajo
+            WHERE trabajo.idEstudiante = :idEstudiante
+              AND trabajo.idTarea IN :idsTarea
+            """)
+    List<Integer> findTaskIdsAssignedTo(
+            @Param("idEstudiante") Integer idEstudiante,
+            @Param("idsTarea") Collection<Integer> idsTarea
+    );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT trabajo FROM TrabajoAsignado trabajo WHERE trabajo.idTrabajo = :idTrabajo")

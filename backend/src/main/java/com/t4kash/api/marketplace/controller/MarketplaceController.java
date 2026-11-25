@@ -22,6 +22,7 @@ import com.t4kash.api.marketplace.service.ApplicationService;
 import com.t4kash.api.marketplace.service.CalificacionService;
 import com.t4kash.api.marketplace.service.DeliveryService;
 import com.t4kash.api.marketplace.service.JobService;
+import com.t4kash.api.marketplace.service.TaskLocationPolicy;
 import com.t4kash.api.marketplace.service.TaskService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -51,6 +52,7 @@ public class MarketplaceController {
     private final JobService jobService;
     private final DeliveryService deliveryService;
     private final CalificacionService calificacionService;
+    private final TaskLocationPolicy locationPolicy;
     private final PublicProfileService profileService;
 
     public MarketplaceController(
@@ -59,13 +61,15 @@ public class MarketplaceController {
             JobService jobService,
             DeliveryService deliveryService,
             CalificacionService calificacionService,
-            PublicProfileService profileService
+            PublicProfileService profileService,
+            TaskLocationPolicy locationPolicy
     ) {
         this.taskService = taskService;
         this.applicationService = applicationService;
         this.jobService = jobService;
         this.deliveryService = deliveryService;
         this.calificacionService = calificacionService;
+        this.locationPolicy = locationPolicy;
         this.profileService = profileService;
     }
 
@@ -78,10 +82,11 @@ public class MarketplaceController {
     @GetMapping("/tasks")
     @Operation(summary = "Listar oportunidades")
     public List<TaskResponse> listTasks(
+            @CurrentUser(required = false) AuthenticatedUserResponse viewer,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size
     ) {
-        return enrichTasks(taskService.listTasks(page, size));
+        return locationPolicy.apply(enrichTasks(taskService.listTasks(page, size)), viewerId(viewer));
     }
 
     @PostMapping("/tasks")
@@ -118,8 +123,11 @@ public class MarketplaceController {
 
     @GetMapping("/tasks/{idTarea}")
     @Operation(summary = "Obtener detalle de una oportunidad")
-    public TaskResponse getTask(@PathVariable Integer idTarea) {
-        return enrichTask(taskService.getTask(idTarea));
+    public TaskResponse getTask(
+            @CurrentUser(required = false) AuthenticatedUserResponse viewer,
+            @PathVariable Integer idTarea
+    ) {
+        return locationPolicy.apply(enrichTask(taskService.getTask(idTarea)), viewerId(viewer));
     }
 
     @GetMapping("/quick-tasks/nearby")
@@ -293,6 +301,10 @@ public class MarketplaceController {
         return deliveryService.addComment(user.idUsuario(), idEntrega, request);
     }
 
+    private Integer viewerId(AuthenticatedUserResponse viewer) {
+        return viewer == null ? null : viewer.idUsuario();
+    }
+
     private List<TaskResponse> enrichTasks(List<TaskResponse> tasks) {
         Map<Integer, PublicIdentityResponse> identities = profileService.getIdentities(
                 tasks.stream().map(TaskResponse::idCliente).toList()
@@ -312,6 +324,7 @@ public class MarketplaceController {
         );
         return tasks.stream()
                 .map(task -> task.withClient(identities.get(task.tarea().idCliente())))
+                .map(QuickTaskResponse::withApproximateLocation)
                 .toList();
     }
 
