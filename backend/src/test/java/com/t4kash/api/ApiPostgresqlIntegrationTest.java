@@ -45,8 +45,7 @@ class ApiPostgresqlIntegrationTest {
             new PostgreSQLContainer<>("postgres:17-alpine")
                     .withDatabaseName("t4kash")
                     .withUsername("t4kash")
-                    .withPassword("t4kash")
-                    .withInitScript("schema-postgresql.sql");
+                    .withPassword("t4kash");
 
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
@@ -79,9 +78,15 @@ class ApiPostgresqlIntegrationTest {
                 FROM information_schema.tables
                 WHERE table_schema = 'public'
                   AND table_type = 'BASE TABLE'
+                  AND table_name <> 'flyway_schema_history'
                 """,
                 Integer.class
         );
+        List<String> appliedVersions = jdbcTemplate.queryForList(
+                "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank",
+                String.class
+        );
+        assertThat(appliedVersions).containsExactly("1", "2");
 
         assertThat(tableCount).isEqualTo(54);
         mockMvc.perform(get("/api/health"))

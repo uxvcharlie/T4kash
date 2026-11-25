@@ -111,7 +111,7 @@ de este mismo repositorio o de las capturas reales de la aplicación.
 | Radio de búsqueda configurable | Pantalla de tareas rápidas |
 | Comisión: 10 % al cliente + 5 % al estudiante | `PaymentService.java` y `application.properties` |
 | 0 % de comisión en efectivo | `cash ? BigDecimal.ZERO : ...` en `PaymentService` |
-| Moneda NIO | `schema-postgresql.sql` |
+| Moneda NIO | `V1__linea_base.sql` (migración Flyway) |
 | «Pago protegido» | Es el nombre que usa la propia app |
 | Calificación mutua de 1 a 5 | `CalificacionService` y tabla `calificaciones` |
 | Android 7.0+ | `minSdk 24` en `mobile/app/build.gradle.kts` |

@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Cada valor está tomado del código Java real (`TaskService`, `NetworkService`,
 /// `ReportService`, las anotaciones `@Pattern` de los DTO y las restricciones
-/// `CHECK` de `database/schema-postgresql.sql`). No hay valores inventados: si un
+/// `CHECK` de las migraciones en `backend/src/main/resources/db/migration`). No hay valores inventados: si un
 /// estado desconocido llega desde la API, se muestra tal cual en vez de romper.
 enum Domain {
 
