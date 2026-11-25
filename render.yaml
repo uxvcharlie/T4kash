@@ -35,6 +35,10 @@ services:
       # Vacio desactiva el push sin romper el arranque.
       - key: FIREBASE_CREDENTIALS_JSON
         sync: false
+      # Render genera un valor aleatorio al crear el servicio desde el blueprint.
+      # Si se cambia, los codigos pendientes dejan de valer (vencen en minutos).
+      - key: APP_AUTH_CODE_SECRET
+        generateValue: true
       - key: APP_AUTH_EVALUATOR_EMAILS
         sync: false
       - key: APP_AUTH_ADMIN_EMAILS

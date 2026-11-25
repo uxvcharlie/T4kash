@@ -19,8 +19,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Locale;
@@ -142,13 +140,14 @@ public class RegistrationService {
             estudianteRepository.save(estudiante);
         }
 
-        VerificacionUsuario verification = verificationRecordService.create(
+        VerificationRecordService.IssuedVerification issued = verificationRecordService.create(
                 usuario,
                 now,
                 REGISTRATION_VERIFICATION,
                 verificationMinutes
         );
-        emailService.sendCode(correo, verification.getCodigoVerificacion(), verificationMinutes);
+        VerificacionUsuario verification = issued.verification();
+        emailService.sendCode(correo, issued.code(), verificationMinutes);
         return registrationResponse(verification);
     }
 
@@ -176,10 +175,7 @@ public class RegistrationService {
                 || !verification.getFechaExpiracion().isAfter(LocalDateTime.now())) {
             throw new IllegalArgumentException("El codigo ha expirado. Solicita uno nuevo.");
         }
-        if (!MessageDigest.isEqual(
-                verification.getCodigoVerificacion().getBytes(StandardCharsets.UTF_8),
-                String.valueOf(request.codigo()).getBytes(StandardCharsets.UTF_8)
-        )) {
+        if (!verificationRecordService.matches(verification, request.codigo())) {
             loginSecurityService.recordFailure(
                     verification.getIdUsuario(),
                     correo,
@@ -245,13 +241,14 @@ public class RegistrationService {
                     }
                 });
 
-        VerificacionUsuario verification = verificationRecordService.create(
+        VerificationRecordService.IssuedVerification issued = verificationRecordService.create(
                 usuario,
                 now,
                 REGISTRATION_VERIFICATION,
                 verificationMinutes
         );
-        emailService.sendCode(correo, verification.getCodigoVerificacion(), verificationMinutes);
+        VerificacionUsuario verification = issued.verification();
+        emailService.sendCode(correo, issued.code(), verificationMinutes);
         return registrationResponse(verification);
     }
 

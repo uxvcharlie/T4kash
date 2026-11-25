@@ -49,9 +49,10 @@ class FlywayBaselineIntegrationTest {
                 "SELECT version, type, success FROM flyway_schema_history ORDER BY installed_rank"
         );
 
-        assertThat(history).extracting(row -> row.get("version")).containsExactly("1", "2");
+        assertThat(history).extracting(row -> row.get("version")).containsExactly("1", "2", "3");
         assertThat(history.get(0).get("type")).isEqualTo("BASELINE");
-        assertThat(history.get(1).get("type")).isEqualTo("SQL");
+        assertThat(history.subList(1, history.size()))
+                .allMatch(row -> "SQL".equals(row.get("type")));
         assertThat(history).allMatch(row -> Boolean.TRUE.equals(row.get("success")));
 
         Integer splitColumns = jdbcTemplate.queryForObject(

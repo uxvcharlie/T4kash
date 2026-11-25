@@ -17,16 +17,26 @@ public class VerificationRecordService {
 
     private final VerificacionUsuarioRepository verificacionRepository;
     private final VerificationCodeService codeService;
+    private final VerificationCodeHasher codeHasher;
 
     public VerificationRecordService(
             VerificacionUsuarioRepository verificacionRepository,
-            VerificationCodeService codeService
+            VerificationCodeService codeService,
+            VerificationCodeHasher codeHasher
     ) {
         this.verificacionRepository = verificacionRepository;
         this.codeService = codeService;
+        this.codeHasher = codeHasher;
     }
 
-    public VerificacionUsuario create(
+    /**
+     * Registro guardado y codigo en claro. El codigo solo se usa para enviarlo
+     * por correo: en la base queda su HMAC.
+     */
+    public record IssuedVerification(VerificacionUsuario verification, String code) {
+    }
+
+    public IssuedVerification create(
             Usuario usuario,
             LocalDateTime now,
             String verificationType,
@@ -35,11 +45,24 @@ public class VerificationRecordService {
         VerificacionUsuario verification = new VerificacionUsuario();
         verification.setIdUsuario(usuario.getIdUsuario());
         verification.setCorreoInstitucional(usuario.getCorreo());
-        verification.setCodigoVerificacion(codeService.generate());
+        String code = codeService.generate();
+        verification.setCodigoVerificacion(
+                codeHasher.hash(verificationType, usuario.getCorreo(), code)
+        );
         verification.setEstadoVerificacion(PENDING_VERIFICATION);
         verification.setFechaSolicitud(now);
         verification.setFechaExpiracion(now.plusMinutes(expirationMinutes));
         verification.setTipoVerificacion(verificationType);
-        return verificacionRepository.save(verification);
+        return new IssuedVerification(verificacionRepository.save(verification), code);
+    }
+
+    /** Compara el codigo recibido con el guardado, en tiempo constante. */
+    public boolean matches(VerificacionUsuario verification, String rawCode) {
+        return codeHasher.matches(
+                verification.getTipoVerificacion(),
+                verification.getCorreoInstitucional(),
+                rawCode,
+                verification.getCodigoVerificacion()
+        );
     }
 }
