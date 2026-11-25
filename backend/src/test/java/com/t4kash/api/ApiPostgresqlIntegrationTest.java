@@ -9,6 +9,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import com.jayway.jsonpath.JsonPath;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -28,6 +30,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -126,6 +129,50 @@ class ApiPostgresqlIntegrationTest {
     }
 
     @Test
+    void fcmTokenCanOnlyBeRegisteredForTheSessionAccount() throws Exception {
+        Session owner = registerAndLogIn("fcm.duena@gmail.com");
+        Session other = registerAndLogIn("fcm.otra@gmail.com");
+        String body = "{\"token\":\"dispositivo-de-la-duena\"}";
+
+        mockMvc.perform(put("/api/auth/{id}/fcm-token", owner.userId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"token-del-atacante\"}"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(put("/api/auth/{id}/fcm-token", owner.userId())
+                        .header(HttpHeaders.AUTHORIZATION, other.bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"token-del-atacante\"}"))
+                .andExpect(status().isForbidden());
+        assertThat(fcmTokenOf(owner.userId())).isNull();
+
+        mockMvc.perform(put("/api/auth/me/fcm-token")
+                        .header(HttpHeaders.AUTHORIZATION, owner.bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isNoContent());
+        assertThat(fcmTokenOf(owner.userId())).isEqualTo("dispositivo-de-la-duena");
+
+        mockMvc.perform(put("/api/auth/me/fcm-token")
+                        .header(HttpHeaders.AUTHORIZATION, owner.bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"  \"}"))
+                .andExpect(status().isBadRequest());
+
+        // El mismo telefono pasa a la otra cuenta: la primera deja de recibir push ahi.
+        mockMvc.perform(put("/api/auth/me/fcm-token")
+                        .header(HttpHeaders.AUTHORIZATION, other.bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isNoContent());
+        assertThat(fcmTokenOf(owner.userId())).isNull();
+        assertThat(fcmTokenOf(other.userId())).isEqualTo("dispositivo-de-la-duena");
+
+        mockMvc.perform(post("/api/auth/logout").header(HttpHeaders.AUTHORIZATION, other.bearer()))
+                .andExpect(status().isNoContent());
+        assertThat(fcmTokenOf(other.userId())).isNull();
+    }
+
+    @Test
     void marketplaceListsRemainBounded() throws Exception {
         mockMvc.perform(get("/api/tasks")
                         .queryParam("page", "0")
@@ -198,5 +245,43 @@ class ApiPostgresqlIntegrationTest {
                 "PARA_TI",
                 PageRequest.of(0, 20)
         )).isEmpty();
+    }
+
+    private record Session(Integer userId, String token) {
+        String bearer() {
+            return "Bearer " + token;
+        }
+    }
+
+    /** Registra una cuenta de cliente por la API, la verifica y devuelve su sesion. */
+    private Session registerAndLogIn(String correo) throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nombre":"Prueba","apellido":"Integracion","correo":"%s","password":"Clave12345"}
+                                """.formatted(correo)))
+                .andExpect(status().isCreated());
+        ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
+        verify(emailService).sendCode(eq(correo), code.capture(), anyInt());
+        String response = mockMvc.perform(post("/api/auth/verify-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"correo":"%s","codigo":"%s"}
+                                """.formatted(correo, code.getValue())))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String token = JsonPath.read(response, "$.token");
+        Integer userId = JsonPath.read(response, "$.usuario.idUsuario");
+        return new Session(userId, token);
+    }
+
+    private String fcmTokenOf(Integer userId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT fcm_token FROM usuarios WHERE id_usuario = ?",
+                String.class,
+                userId
+        );
     }
 }

@@ -104,13 +104,6 @@ public class LoginService {
             throw new InvalidCredentialsException("La cuenta no se encuentra activa.");
         }
 
-        // ---> MODIFICACIÓN FCM TOKEN: Guardamos el token en la BD <---
-        if (request.fcmToken() != null && !request.fcmToken().isEmpty()) {
-            usuario.setFcmToken(request.fcmToken());
-            usuarioRepository.save(usuario);
-        }
-        // -------------------------------------------------------------
-
         LocalDateTime now = now();
         VerificacionUsuario previous = verificacionRepository
                 .findFirstByCorreoInstitucionalIgnoreCaseAndTipoVerificacionOrderByFechaSolicitudDesc(

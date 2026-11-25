@@ -80,9 +80,9 @@ interface AuthApiService {
         @retrofit2.http.Path("universityId") universityId: Int
     ): List<CareerDto>
 
-    @PUT("auth/{id}/fcm-token")
+    // El backend toma la cuenta de la sesion (header Authorization), nunca de un id.
+    @PUT("auth/me/fcm-token")
     suspend fun enviarTokenFCM(
-        @retrofit2.http.Path("id") id: Long,
         @Body request: FcmTokenRequest
     ): Response<Unit>
 }

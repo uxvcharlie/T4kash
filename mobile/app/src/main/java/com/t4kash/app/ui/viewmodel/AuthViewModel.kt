@@ -370,7 +370,7 @@ class AuthViewModel(
                     uiState = uiState.copy(isLoading = false)
 
 
-                    sincronizarTokenFirebase(result.data.usuario.idUsuario.toLong())
+                    sincronizarTokenFirebase()
 
 
                     onSuccess()
@@ -384,7 +384,7 @@ class AuthViewModel(
         }
     }
 
-    private fun sincronizarTokenFirebase(userId: Long) {
+    private fun sincronizarTokenFirebase() {
         val messaging = try {
             FirebaseMessaging.getInstance()
         } catch (e: IllegalStateException) {
@@ -404,7 +404,7 @@ class AuthViewModel(
                     val requestBody = FcmTokenRequest(token = tokenFCM)
 
                     // Llamada al repositorio para enviar el token
-                    val exito = repository.enviarTokenFCM(userId, requestBody)
+                    val exito = repository.enviarTokenFCM(requestBody)
 
                     if (exito) {
                         Log.d("FCM_SYNC", "Token sincronizado en PostgreSQL")

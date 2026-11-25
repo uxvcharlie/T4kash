@@ -100,9 +100,9 @@ class AuthRepository(
         api.logout()
     }
 
-    suspend fun enviarTokenFCM(userId: Long, request: FcmTokenRequest): Boolean {
+    suspend fun enviarTokenFCM(request: FcmTokenRequest): Boolean {
         return try {
-            val response = api.enviarTokenFCM(userId, request)
+            val response = api.enviarTokenFCM(request)
             response.isSuccessful
         } catch (e: Exception) {
             false
