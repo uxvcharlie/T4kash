@@ -29,3 +29,7 @@ ALTER TABLE pagos
         AND comision_estudiante >= 0
         AND comision_plataforma = comision_cliente + comision_estudiante
     );
+
+-- Los pagos nuevos registran el take rate completo (10 % + 5 %).
+ALTER TABLE pagos
+    ALTER COLUMN porcentaje_comision_plataforma SET DEFAULT 15.00;

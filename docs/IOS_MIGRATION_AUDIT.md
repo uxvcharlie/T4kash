@@ -15,7 +15,7 @@ Todo lo que aparece aquí fue verificado leyendo el código real del repositorio
 ```
 T4k4sh/
 ├── backend/     API REST Spring Boot (Java 21) — 169 archivos .java
-├── database/    Esquema PostgreSQL 16 (schema-postgresql.sql)
+├── database/    Esquema PostgreSQL (migraciones Flyway en backend/src/main/resources/db/migration)
 ├── mobile/      App Android (Kotlin + Jetpack Compose) — 65 archivos .kt, ~18.5k líneas
 ├── docs/        Diagramas, capturas y esta auditoría
 ├── ios/         App iOS (nueva, esta migración)

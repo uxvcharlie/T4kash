@@ -199,7 +199,7 @@ T4k4sh/
 │   ├── T4KASHTests/           Pruebas unitarias
 │   └── README.md              Configuración, compilación y limitaciones
 ├── database/
-│   ├── schema-postgresql.sql  Esquema oficial
+│   ├── README.md              Cómo se versiona el esquema (Flyway)
 │   └── sqlserver-original.sql Referencia histórica
 ├── landing/
 │   ├── web/                   Página pública: React, TypeScript y Tailwind
@@ -245,8 +245,8 @@ docker compose logs -f api
 docker compose down
 ```
 
-La primera creación del volumen carga automáticamente
-[`database/schema-postgresql.sql`](./database/schema-postgresql.sql).
+Al arrancar, el API crea o actualiza el esquema con las migraciones Flyway de
+[`backend/src/main/resources/db/migration`](./backend/src/main/resources/db/migration).
 
 ### Android contra Render
 
@@ -455,9 +455,9 @@ solicitud puede tardar mientras el servicio vuelve a iniciar.
 
 ## Base de datos y diagramas
 
-La fuente oficial es
-[`database/schema-postgresql.sql`](./database/schema-postgresql.sql). El modelo contiene
-54 tablas normalizadas y organizadas en identidad, marketplace, finanzas, puntos,
+La fuente oficial del esquema son las migraciones Flyway de
+[`backend/src/main/resources/db/migration`](./backend/src/main/resources/db/migration)
+(ver [`database/README.md`](./database/README.md)). El modelo contiene 54 tablas normalizadas y organizadas en identidad, marketplace, finanzas, puntos,
 comunicación, Network, moderación y auditoría.
 
 Incluye:
