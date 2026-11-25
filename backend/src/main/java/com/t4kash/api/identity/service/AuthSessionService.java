@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 /**
  * Centraliza el ciclo de vida de las sesiones: emite tokens, identifica al
@@ -30,6 +31,7 @@ import java.time.temporal.ChronoUnit;
 public class AuthSessionService {
     private static final String ACTIVE_USER = "ACTIVO";
     private static final String ACTIVE_SESSION = "ACTIVA";
+    private static final String ADMIN_ROLE = "ADMIN";
     private static final int SESSION_DAYS = 7;
 
     private final UsuarioRepository usuarioRepository;
@@ -122,10 +124,30 @@ public class AuthSessionService {
                 });
     }
 
+    /**
+     * El rol ADMIN sale solo de APP_AUTH_ADMIN_EMAILS: al iniciar sesion se
+     * agrega o se quita segun la lista vigente.
+     */
     private void assignConfiguredAdminRole(Usuario usuario) {
         if (adminEmailPolicyService.isAdmin(usuario.getCorreo())) {
-            usuarioRolRepository.assignRole(usuario.getIdUsuario(), "ADMIN");
+            usuarioRolRepository.assignRole(usuario.getIdUsuario(), ADMIN_ROLE);
+        } else {
+            usuarioRolRepository.removeRole(usuario.getIdUsuario(), ADMIN_ROLE);
         }
+    }
+
+    /**
+     * Quita ADMIN si el correo ya no esta en la lista, para que el cambio
+     * valga desde la siguiente peticion y no recien al volver a iniciar sesion.
+     */
+    private List<String> effectiveRoles(Usuario usuario) {
+        List<String> roles = usuarioRolRepository.findRoleNames(usuario.getIdUsuario());
+        if (adminEmailPolicyService.isAdmin(usuario.getCorreo())) {
+            return roles;
+        }
+        return roles.stream()
+                .filter(role -> !ADMIN_ROLE.equalsIgnoreCase(role))
+                .toList();
     }
 
     private SesionUsuario requireActiveSession(String rawToken) {
@@ -174,7 +196,7 @@ public class AuthSessionService {
                 careerId,
                 careerName,
                 usuario.getEstadoUsuario(),
-                usuarioRolRepository.findRoleNames(usuario.getIdUsuario())
+                effectiveRoles(usuario)
         );
     }
 

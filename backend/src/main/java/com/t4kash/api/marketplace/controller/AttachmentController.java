@@ -40,7 +40,11 @@ public class AttachmentController {
             @CurrentUser AuthenticatedUserResponse user,
             @PathVariable Integer taskId
     ) {
-        return attachmentService.listTaskAttachments(taskId);
+        return attachmentService.listTaskAttachments(
+                taskId,
+                user.idUsuario(),
+                user.roles().stream().anyMatch("ADMIN"::equalsIgnoreCase)
+        );
     }
 
     @PostMapping(

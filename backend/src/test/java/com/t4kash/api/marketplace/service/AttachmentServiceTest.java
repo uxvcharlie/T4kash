@@ -7,6 +7,7 @@ import com.t4kash.api.marketplace.entity.Tarea;
 import com.t4kash.api.marketplace.repository.ArchivoAdjuntoRepository;
 import com.t4kash.api.marketplace.repository.EntregaRepository;
 import com.t4kash.api.marketplace.repository.TareaRepository;
+import com.t4kash.api.marketplace.repository.PostulacionRepository;
 import com.t4kash.api.marketplace.repository.TrabajoAsignadoRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,8 @@ class AttachmentServiceTest {
     @Mock
     private TrabajoAsignadoRepository trabajoRepository;
     @Mock
+    private PostulacionRepository postulacionRepository;
+    @Mock
     private ObjectStorage objectStorage;
 
     private AttachmentService service;
@@ -49,6 +52,7 @@ class AttachmentServiceTest {
                 tareaRepository,
                 entregaRepository,
                 trabajoRepository,
+                postulacionRepository,
                 objectStorage
         );
     }
@@ -148,6 +152,50 @@ class AttachmentServiceTest {
                 () -> service.attachToTask(10, 99, file)
         );
         verify(objectStorage, never()).upload(any(), any(), any());
+    }
+
+    @Test
+    void anyLoggedInUserCanSeeTheAttachmentsOfAPublishedTask() {
+        mockTaskInState("PUBLICADA");
+        when(archivoRepository.findByIdTareaAndEstadoArchivoOrderByFechaSubidaDesc(10, "ACTIVO"))
+                .thenReturn(java.util.List.of());
+
+        assertTrue(service.listTaskAttachments(10, 99, false).isEmpty());
+    }
+
+    @Test
+    void outsidersCannotSeeTheAttachmentsOfATaskThatIsNoLongerPublished() {
+        mockTaskInState("ASIGNADA");
+        when(postulacionRepository.existsByIdTareaAndIdEstudiante(10, 99)).thenReturn(false);
+        when(trabajoRepository.findByIdTarea(10)).thenReturn(Optional.empty());
+
+        assertThrows(ForbiddenOperationException.class, () -> service.listTaskAttachments(10, 99, false));
+    }
+
+    @Test
+    void ownerApplicantAssignedStudentAndAdminKeepAccessAfterPublication() {
+        mockTaskInState("ASIGNADA");
+        when(archivoRepository.findByIdTareaAndEstadoArchivoOrderByFechaSubidaDesc(10, "ACTIVO"))
+                .thenReturn(java.util.List.of());
+        when(postulacionRepository.existsByIdTareaAndIdEstudiante(10, 20)).thenReturn(true);
+        com.t4kash.api.marketplace.entity.TrabajoAsignado job =
+                new com.t4kash.api.marketplace.entity.TrabajoAsignado();
+        job.setIdEstudiante(30);
+        when(postulacionRepository.existsByIdTareaAndIdEstudiante(10, 30)).thenReturn(false);
+        when(trabajoRepository.findByIdTarea(10)).thenReturn(Optional.of(job));
+
+        assertTrue(service.listTaskAttachments(10, 1, false).isEmpty());
+        assertTrue(service.listTaskAttachments(10, 20, false).isEmpty());
+        assertTrue(service.listTaskAttachments(10, 30, false).isEmpty());
+        assertTrue(service.listTaskAttachments(10, 99, true).isEmpty());
+    }
+
+    private void mockTaskInState(String state) {
+        Tarea task = new Tarea();
+        task.setIdTarea(10);
+        task.setIdCliente(1);
+        task.setEstadoTarea(state);
+        when(tareaRepository.findById(10)).thenReturn(Optional.of(task));
     }
 
     private void mockOwnedTask() {

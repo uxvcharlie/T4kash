@@ -282,6 +282,43 @@ class ApiPostgresqlIntegrationTest {
     }
 
     @Test
+    void adminRoleFollowsTheConfiguredListInsteadOfTheDatabase() throws Exception {
+        // Simula una cuenta que fue admin y cuyo correo se quito de APP_AUTH_ADMIN_EMAILS.
+        Session former = registerAndLogIn("ex.admin@gmail.com");
+        jdbcTemplate.update(
+                """
+                INSERT INTO usuario_roles (id_usuario, id_rol)
+                SELECT ?, id_rol FROM roles WHERE nombre_rol = 'ADMIN'
+                """,
+                former.userId()
+        );
+
+        mockMvc.perform(get("/api/admin/summary").header(HttpHeaders.AUTHORIZATION, former.bearer()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, former.bearer()))
+                .andExpect(jsonPath("$.roles", Matchers.not(Matchers.hasItem("ADMIN"))));
+
+        login("ex.admin@gmail.com", "Clave12345", "127.0.0.1").andExpect(status().isOk());
+        ArgumentCaptor<String> loginCode = ArgumentCaptor.forClass(String.class);
+        verify(emailService).sendLoginCode(eq("ex.admin@gmail.com"), loginCode.capture(), anyInt());
+        mockMvc.perform(post("/api/auth/login/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"correo":"ex.admin@gmail.com","codigo":"%s"}
+                                """.formatted(loginCode.getValue())))
+                .andExpect(status().isOk());
+        Integer adminRows = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*) FROM usuario_roles ur JOIN roles r ON r.id_rol = ur.id_rol
+                WHERE ur.id_usuario = ? AND r.nombre_rol = 'ADMIN'
+                """,
+                Integer.class,
+                former.userId()
+        );
+        assertThat(adminRows).isZero();
+    }
+
+    @Test
     void marketplaceListsRemainBounded() throws Exception {
         mockMvc.perform(get("/api/tasks")
                         .queryParam("page", "0")

@@ -36,4 +36,18 @@ public interface UsuarioRolRepository extends Repository<Usuario, Integer> {
             @Param("idUsuario") Integer idUsuario,
             @Param("nombreRol") String nombreRol
     );
+
+    @Modifying
+    @Query(
+            value = """
+                    DELETE FROM usuario_roles
+                    WHERE id_usuario = :idUsuario
+                      AND id_rol IN (SELECT id_rol FROM roles WHERE nombre_rol = :nombreRol)
+                    """,
+            nativeQuery = true
+    )
+    int removeRole(
+            @Param("idUsuario") Integer idUsuario,
+            @Param("nombreRol") String nombreRol
+    );
 }
