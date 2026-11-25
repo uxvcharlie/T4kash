@@ -28,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -108,7 +109,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void listingTasksClosesExpiredPublications() {
+    void listingTasksOnlyReadsAndLeavesClosingToTheScheduledJob() {
         Tarea closedTask = task(
                 10,
                 "CERRADA",
@@ -119,7 +120,7 @@ class TaskServiceTest {
 
         List<TaskResponse> response = service.listTasks();
 
-        verify(tareaRepository).closeExpiredPublishedTasks(any(LocalDateTime.class));
+        verify(tareaRepository, never()).closeExpiredPublishedTasks(any(LocalDateTime.class));
         assertEquals("CERRADA", response.getFirst().estadoTarea());
     }
 

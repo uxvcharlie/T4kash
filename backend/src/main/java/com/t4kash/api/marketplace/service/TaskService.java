@@ -79,9 +79,12 @@ public class TaskService {
         return listTasks(0, PaginationSupport.DEFAULT_SIZE);
     }
 
-    @Transactional
+    /**
+     * Solo lectura: las tareas vencidas las cierra MaintenanceJobs cada pocos
+     * minutos, en lugar de ejecutar un UPDATE en cada visita anonima.
+     */
+    @Transactional(readOnly = true)
     public List<TaskResponse> listTasks(int page, int size) {
-        tareaRepository.closeExpiredPublishedTasks(LocalDateTime.now());
         return tareaRepository
                 .findAllByOrderByFechaPublicacionDesc(PaginationSupport.page(page, size))
                 .stream()

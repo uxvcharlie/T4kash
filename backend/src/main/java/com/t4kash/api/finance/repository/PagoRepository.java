@@ -9,11 +9,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 public interface PagoRepository extends JpaRepository<Pago, Integer> {
     Optional<Pago> findByIdTrabajo(Integer idTrabajo);
+
+    long countByEstadoPagoAndFechaConfirmacionBefore(String estadoPago, LocalDateTime fecha);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT pago FROM Pago pago WHERE pago.idPago = :idPago")
