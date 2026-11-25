@@ -17,6 +17,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -52,6 +53,9 @@ class ApiPostgresqlIntegrationTest {
         registry.add("spring.datasource.username", POSTGRESQL::getUsername);
         registry.add("spring.datasource.password", POSTGRESQL::getPassword);
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+        // El filtro por IP tiene su propia prueba; aqui todas las peticiones salen de 127.0.0.1.
+        registry.add("app.rate-limit.auth-requests-per-minute", () -> "1000");
+        registry.add("app.rate-limit.email-requests-per-window", () -> "1000");
     }
 
     @Autowired
@@ -173,6 +177,38 @@ class ApiPostgresqlIntegrationTest {
     }
 
     @Test
+    void emailVerificationStopsAcceptingGuessesAfterFiveWrongCodes() throws Exception {
+        String correo = "victima.codigo@gmail.com";
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nombre":"Vic","apellido":"Tima","correo":"%s","password":"Clave12345"}
+                                """.formatted(correo)))
+                .andExpect(status().isCreated());
+        ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
+        verify(emailService).sendCode(eq(correo), code.capture(), anyInt());
+        String wrongCode = "%06d".formatted((Integer.parseInt(code.getValue()) + 1) % 1_000_000);
+
+        for (int attempt = 0; attempt < 5; attempt++) {
+            verifyEmail(correo, wrongCode).andExpect(status().isBadRequest());
+        }
+        // Ni siquiera el codigo correcto entra mientras dura el bloqueo.
+        verifyEmail(correo, code.getValue()).andExpect(status().isTooManyRequests());
+    }
+
+    @Test
+    void failedLoginsFromOneIpDoNotLockTheOwnerOutFromAnotherIp() throws Exception {
+        String correo = "duena.bloqueo@gmail.com";
+        registerAndLogIn(correo);
+
+        for (int attempt = 0; attempt < 5; attempt++) {
+            login(correo, "ClaveIncorrecta1", "203.0.113.66").andExpect(status().isUnauthorized());
+        }
+        login(correo, "ClaveIncorrecta1", "203.0.113.66").andExpect(status().isTooManyRequests());
+        login(correo, "Clave12345", "198.51.100.20").andExpect(status().isOk());
+    }
+
+    @Test
     void marketplaceListsRemainBounded() throws Exception {
         mockMvc.perform(get("/api/tasks")
                         .queryParam("page", "0")
@@ -275,6 +311,26 @@ class ApiPostgresqlIntegrationTest {
         String token = JsonPath.read(response, "$.token");
         Integer userId = JsonPath.read(response, "$.usuario.idUsuario");
         return new Session(userId, token);
+    }
+
+    private ResultActions verifyEmail(String correo, String codigo) throws Exception {
+        return mockMvc.perform(post("/api/auth/verify-email")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"correo":"%s","codigo":"%s"}
+                        """.formatted(correo, codigo)));
+    }
+
+    private ResultActions login(String correo, String password, String ip) throws Exception {
+        return mockMvc.perform(post("/api/auth/login")
+                .with(request -> {
+                    request.setRemoteAddr(ip);
+                    return request;
+                })
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"correo":"%s","password":"%s"}
+                        """.formatted(correo, password)));
     }
 
     private String fcmTokenOf(Integer userId) {

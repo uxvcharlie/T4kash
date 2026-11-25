@@ -1,5 +1,6 @@
 package com.t4kash.api.admin.controller;
 
+import com.t4kash.api.config.ClientIpResolver;
 import com.t4kash.api.admin.dto.AdminSummaryResponse;
 import com.t4kash.api.admin.service.AdminService;
 import com.t4kash.api.identity.dto.AuthenticatedUserResponse;
@@ -40,17 +41,20 @@ public class AdminController {
     private final ReportService reportService;
     private final PublicProfileService profileService;
     private final PaymentDisputeService disputeService;
+    private final ClientIpResolver clientIpResolver;
 
     public AdminController(
             AdminService adminService,
             ReportService reportService,
             PublicProfileService profileService,
-            PaymentDisputeService disputeService
+            PaymentDisputeService disputeService,
+            ClientIpResolver clientIpResolver
     ) {
         this.adminService = adminService;
         this.reportService = reportService;
         this.profileService = profileService;
         this.disputeService = disputeService;
+        this.clientIpResolver = clientIpResolver;
     }
 
     @GetMapping("/summary")
@@ -139,10 +143,6 @@ public class AdminController {
     }
 
     private String clientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
+        return clientIpResolver.resolve(request);
     }
 }

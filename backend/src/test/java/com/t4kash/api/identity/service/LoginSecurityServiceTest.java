@@ -24,50 +24,105 @@ class LoginSecurityServiceTest {
     @Mock
     private IntentoLoginRepository intentoRepository;
 
-    @Test
-    void allowsLoginWhenFailureLimitWasNotReached() {
-        LoginSecurityService service = service();
-        when(intentoRepository
-                .findFirstByCorreoIgnoreCaseAndExitosoTrueOrderByFechaIntentoDesc(
-                        "student@example.com"
-                ))
-                .thenReturn(Optional.empty());
-        when(intentoRepository
-                .countByCorreoIgnoreCaseAndExitosoFalseAndFechaIntentoAfter(
-                        eq("student@example.com"),
-                        any(LocalDateTime.class)
-                ))
-                .thenReturn(4L);
+    private static final String EMAIL = "student@example.com";
+    private static final String IP = "203.0.113.7";
 
-        assertDoesNotThrow(() -> service.requireAvailable("student@example.com"));
+    @Test
+    void allowsLoginWhenNeitherLimitWasReached() {
+        LoginSecurityService service = service();
+        noRecentSuccess();
+        pairFailures(4L);
+        accountFailures(4L);
+
+        assertDoesNotThrow(() -> service.requireAvailable(EMAIL, IP));
     }
 
     @Test
-    void blocksLoginAfterFiveRecentFailures() {
+    void blocksTheSameEmailAndIpAfterFiveRecentFailures() {
         LoginSecurityService service = service();
-        IntentoLogin lastFailure = new IntentoLogin();
-        lastFailure.setFechaIntento(LocalDateTime.now().minusMinutes(1));
+        noRecentSuccess();
+        pairFailures(5L);
         when(intentoRepository
-                .findFirstByCorreoIgnoreCaseAndExitosoTrueOrderByFechaIntentoDesc(
-                        "student@example.com"
-                ))
-                .thenReturn(Optional.empty());
+                .findFirstByCorreoIgnoreCaseAndIpOrigenAndExitosoFalseOrderByFechaIntentoDesc(EMAIL, IP))
+                .thenReturn(Optional.of(failureMinutesAgo(1)));
+
+        assertThrows(TooManyAttemptsException.class, () -> service.requireAvailable(EMAIL, IP));
+    }
+
+    @Test
+    void failuresFromAnotherIpDoNotLockTheOwnerOut() {
+        // Cinco fallos desde la IP del atacante no cuentan para la IP de la duena.
+        LoginSecurityService service = service();
+        noRecentSuccess();
+        pairFailures(0L);
+        accountFailures(5L);
+
+        assertDoesNotThrow(() -> service.requireAvailable(EMAIL, IP));
+    }
+
+    @Test
+    void blocksTheAccountAfterTwentyFailuresFromAnyIp() {
+        LoginSecurityService service = service();
+        noRecentSuccess();
+        pairFailures(1L);
+        accountFailures(20L);
+        when(intentoRepository.findFirstByCorreoIgnoreCaseAndExitosoFalseOrderByFechaIntentoDesc(EMAIL))
+                .thenReturn(Optional.of(failureMinutesAgo(2)));
+
+        assertThrows(TooManyAttemptsException.class, () -> service.requireAvailable(EMAIL, IP));
+    }
+
+    @Test
+    void releasesTheLockOnceTheLockTimePassed() {
+        LoginSecurityService service = service();
+        noRecentSuccess();
+        pairFailures(5L);
+        accountFailures(5L);
         when(intentoRepository
-                .countByCorreoIgnoreCaseAndExitosoFalseAndFechaIntentoAfter(
-                        eq("student@example.com"),
-                        any(LocalDateTime.class)
-                ))
+                .findFirstByCorreoIgnoreCaseAndIpOrigenAndExitosoFalseOrderByFechaIntentoDesc(EMAIL, IP))
+                .thenReturn(Optional.of(failureMinutesAgo(16)));
+
+        assertDoesNotThrow(() -> service.requireAvailable(EMAIL, IP));
+    }
+
+    @Test
+    void treatsAMissingIpAsUnknownInsteadOfSkippingTheLimit() {
+        LoginSecurityService service = service();
+        noRecentSuccess();
+        when(intentoRepository
+                .countByCorreoIgnoreCaseAndIpOrigenAndExitosoFalseAndFechaIntentoAfter(
+                        eq(EMAIL), eq(LoginSecurityService.UNKNOWN_IP), any(LocalDateTime.class)))
                 .thenReturn(5L);
         when(intentoRepository
-                .findFirstByCorreoIgnoreCaseAndExitosoFalseOrderByFechaIntentoDesc(
-                        "student@example.com"
-                ))
-                .thenReturn(Optional.of(lastFailure));
+                .findFirstByCorreoIgnoreCaseAndIpOrigenAndExitosoFalseOrderByFechaIntentoDesc(
+                        EMAIL, LoginSecurityService.UNKNOWN_IP))
+                .thenReturn(Optional.of(failureMinutesAgo(1)));
 
-        assertThrows(
-                TooManyAttemptsException.class,
-                () -> service.requireAvailable("student@example.com")
-        );
+        assertThrows(TooManyAttemptsException.class, () -> service.requireAvailable(EMAIL, null));
+    }
+
+    private void noRecentSuccess() {
+        when(intentoRepository.findFirstByCorreoIgnoreCaseAndExitosoTrueOrderByFechaIntentoDesc(EMAIL))
+                .thenReturn(Optional.empty());
+    }
+
+    private void pairFailures(long count) {
+        when(intentoRepository
+                .countByCorreoIgnoreCaseAndIpOrigenAndExitosoFalseAndFechaIntentoAfter(
+                        eq(EMAIL), eq(IP), any(LocalDateTime.class)))
+                .thenReturn(count);
+    }
+
+    private void accountFailures(long count) {
+        when(intentoRepository
+                .countByCorreoIgnoreCaseAndExitosoFalseAndFechaIntentoAfter(eq(EMAIL), any(LocalDateTime.class)))
+                .thenReturn(count);
+    }
+
+    private IntentoLogin failureMinutesAgo(int minutes) {
+        IntentoLogin failure = new IntentoLogin();
+        failure.setFechaIntento(LocalDateTime.now().minusMinutes(minutes));
+        return failure;
     }
 
     @Test
@@ -100,6 +155,6 @@ class LoginSecurityServiceTest {
     }
 
     private LoginSecurityService service() {
-        return new LoginSecurityService(intentoRepository, 5, 15, 15);
+        return new LoginSecurityService(intentoRepository, 5, 20, 15, 15);
     }
 }

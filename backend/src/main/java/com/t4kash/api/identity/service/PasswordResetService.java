@@ -104,7 +104,7 @@ public class PasswordResetService {
             String userAgent
     ) {
         String correo = normalizeEmail(request.correo());
-        loginSecurityService.requireAvailable(correo);
+        loginSecurityService.requireAvailable(correo, ipOrigen);
         Usuario usuario = usuarioRepository.findByCorreoIgnoreCase(correo)
                 .orElseThrow(() -> new InvalidCredentialsException(
                         "El codigo no es valido o ha expirado."
