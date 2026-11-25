@@ -19,6 +19,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Locale;
@@ -42,6 +44,7 @@ public class RegistrationService {
     private final RegistrationPolicyService registrationPolicyService;
     private final UsernameService usernameService;
     private final AuthSessionService authSessionService;
+    private final LoginSecurityService loginSecurityService;
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(12);
     private final int verificationMinutes;
     private final int resendSeconds;
@@ -56,6 +59,7 @@ public class RegistrationService {
             RegistrationPolicyService registrationPolicyService,
             UsernameService usernameService,
             AuthSessionService authSessionService,
+            LoginSecurityService loginSecurityService,
             @Value("${app.auth.verification-minutes:15}") int verificationMinutes,
             @Value("${app.auth.verification-resend-seconds:60}") int resendSeconds
     ) {
@@ -68,6 +72,7 @@ public class RegistrationService {
         this.registrationPolicyService = registrationPolicyService;
         this.usernameService = usernameService;
         this.authSessionService = authSessionService;
+        this.loginSecurityService = loginSecurityService;
         this.verificationMinutes = verificationMinutes;
         this.resendSeconds = resendSeconds;
     }
@@ -154,6 +159,9 @@ public class RegistrationService {
             String userAgent
     ) {
         String correo = normalizeEmail(request.correo());
+        // Sin este limite, el codigo de 6 digitos se puede adivinar dentro de
+        // su vigencia y activar una cuenta con un correo institucional ajeno.
+        loginSecurityService.requireAvailable(correo, ipOrigen);
         VerificacionUsuario verification = verificacionRepository
                 .findFirstByCorreoInstitucionalIgnoreCaseAndTipoVerificacionOrderByFechaSolicitudDesc(
                         correo,
@@ -168,7 +176,17 @@ public class RegistrationService {
                 || !verification.getFechaExpiracion().isAfter(LocalDateTime.now())) {
             throw new IllegalArgumentException("El codigo ha expirado. Solicita uno nuevo.");
         }
-        if (!verification.getCodigoVerificacion().equals(request.codigo())) {
+        if (!MessageDigest.isEqual(
+                verification.getCodigoVerificacion().getBytes(StandardCharsets.UTF_8),
+                String.valueOf(request.codigo()).getBytes(StandardCharsets.UTF_8)
+        )) {
+            loginSecurityService.recordFailure(
+                    verification.getIdUsuario(),
+                    correo,
+                    "CODIGO_REGISTRO_INVALIDO",
+                    ipOrigen,
+                    userAgent
+            );
             throw new IllegalArgumentException("El codigo de verificacion es incorrecto.");
         }
 

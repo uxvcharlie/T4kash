@@ -67,7 +67,7 @@ public class LoginService {
             String userAgent
     ) {
         String correo = normalizeEmail(request.correo());
-        loginSecurityService.requireAvailable(correo);
+        loginSecurityService.requireAvailable(correo, ipOrigen);
         Usuario usuario = usuarioRepository.findByCorreoIgnoreCase(correo).orElse(null);
 
         if (usuario == null
@@ -142,7 +142,7 @@ public class LoginService {
             String userAgent
     ) {
         String correo = normalizeEmail(request.correo());
-        loginSecurityService.requireAvailable(correo);
+        loginSecurityService.requireAvailable(correo, ipOrigen);
         Usuario usuario = usuarioRepository.findByCorreoIgnoreCase(correo)
                 .orElseThrow(() -> new InvalidCredentialsException(
                         "El codigo no es valido o ha expirado."

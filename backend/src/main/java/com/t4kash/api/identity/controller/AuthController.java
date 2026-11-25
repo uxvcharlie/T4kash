@@ -1,5 +1,6 @@
 package com.t4kash.api.identity.controller;
 
+import com.t4kash.api.config.ClientIpResolver;
 import com.t4kash.api.exception.ForbiddenOperationException;
 import com.t4kash.api.exception.InvalidCredentialsException;
 import com.t4kash.api.identity.dto.*;
@@ -25,17 +26,20 @@ public class AuthController {
     private final LoginService loginService;
     private final PasswordResetService passwordResetService;
     private final AuthSessionService authSessionService;
+    private final ClientIpResolver clientIpResolver;
 
     public AuthController(
             RegistrationService registrationService,
             LoginService loginService,
             PasswordResetService passwordResetService,
-            AuthSessionService authSessionService
+            AuthSessionService authSessionService,
+            ClientIpResolver clientIpResolver
     ) {
         this.registrationService = registrationService;
         this.loginService = loginService;
         this.passwordResetService = passwordResetService;
         this.authSessionService = authSessionService;
+        this.clientIpResolver = clientIpResolver;
     }
 
     @PostMapping("/register")
@@ -137,11 +141,7 @@ public class AuthController {
     }
 
     private String clientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
+        return clientIpResolver.resolve(request);
     }
 
     /**

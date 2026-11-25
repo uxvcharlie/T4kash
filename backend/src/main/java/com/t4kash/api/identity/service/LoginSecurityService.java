@@ -11,27 +11,42 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 
 @Service
 public class LoginSecurityService {
+    static final String UNKNOWN_IP = "desconocida";
+
     private final IntentoLoginRepository intentoRepository;
     private final int maxAttempts;
+    private final int maxAttemptsPerAccount;
     private final int windowMinutes;
     private final int lockMinutes;
 
     public LoginSecurityService(
             IntentoLoginRepository intentoRepository,
             @Value("${app.auth.login-max-attempts:5}") int maxAttempts,
+            @Value("${app.auth.login-max-attempts-per-account:20}") int maxAttemptsPerAccount,
             @Value("${app.auth.login-window-minutes:15}") int windowMinutes,
             @Value("${app.auth.login-lock-minutes:15}") int lockMinutes
     ) {
         this.intentoRepository = intentoRepository;
         this.maxAttempts = maxAttempts;
+        this.maxAttemptsPerAccount = Math.max(maxAttempts, maxAttemptsPerAccount);
         this.windowMinutes = windowMinutes;
         this.lockMinutes = lockMinutes;
     }
 
-    public void requireAvailable(String correo) {
+    /**
+     * Rechaza el intento si hubo demasiados fallos recientes.
+     *
+     * <p>Hay dos limites. El de correo + IP bloquea solo a quien esta
+     * fallando, asi que nadie puede dejar fuera a otra persona desde su
+     * propia conexion. El de la cuenta, mas alto, frena la fuerza bruta
+     * repartida entre muchas IP. Los fallos cuentan desde el ultimo acceso
+     * exitoso dentro de la ventana.
+     */
+    public void requireAvailable(String correo, String ipOrigen) {
         LocalDateTime now = now();
         LocalDateTime windowStart = now.minusMinutes(windowMinutes);
         LocalDateTime cutoff = intentoRepository
@@ -39,20 +54,43 @@ public class LoginSecurityService {
                 .map(IntentoLogin::getFechaIntento)
                 .filter(lastSuccess -> lastSuccess.isAfter(windowStart))
                 .orElse(windowStart);
+        String ip = normalizeIp(ipOrigen);
 
-        long failures = intentoRepository
+        long pairFailures = intentoRepository
+                .countByCorreoIgnoreCaseAndIpOrigenAndExitosoFalseAndFechaIntentoAfter(
+                        correo,
+                        ip,
+                        cutoff
+                );
+        if (pairFailures >= maxAttempts) {
+            requireUnlocked(
+                    intentoRepository
+                            .findFirstByCorreoIgnoreCaseAndIpOrigenAndExitosoFalseOrderByFechaIntentoDesc(
+                                    correo,
+                                    ip
+                            ),
+                    now
+            );
+        }
+
+        long accountFailures = intentoRepository
                 .countByCorreoIgnoreCaseAndExitosoFalseAndFechaIntentoAfter(
                         correo,
                         cutoff
                 );
-        if (failures < maxAttempts) {
-            return;
+        if (accountFailures >= maxAttemptsPerAccount) {
+            requireUnlocked(
+                    intentoRepository
+                            .findFirstByCorreoIgnoreCaseAndExitosoFalseOrderByFechaIntentoDesc(correo),
+                    now
+            );
         }
+    }
 
-        LocalDateTime lockedUntil = intentoRepository
-                .findFirstByCorreoIgnoreCaseAndExitosoFalseOrderByFechaIntentoDesc(correo)
+    private void requireUnlocked(Optional<IntentoLogin> lastFailure, LocalDateTime now) {
+        LocalDateTime lockedUntil = lastFailure
                 .map(IntentoLogin::getFechaIntento)
-                .map(lastFailure -> lastFailure.plusMinutes(lockMinutes))
+                .map(failure -> failure.plusMinutes(lockMinutes))
                 .orElse(now);
         if (!lockedUntil.isAfter(now)) {
             return;
@@ -101,10 +139,16 @@ public class LoginSecurityService {
         attempt.setCorreo(limit(correo, 150));
         attempt.setExitoso(successful);
         attempt.setMotivoFallo(limit(reason, 150));
-        attempt.setIpOrigen(limit(ipOrigen, 45));
+        attempt.setIpOrigen(normalizeIp(ipOrigen));
         attempt.setUserAgent(limit(userAgent, 500));
         attempt.setFechaIntento(now());
         intentoRepository.save(attempt);
+    }
+
+    /** Las consultas por IP necesitan un valor: una IP ausente cuenta como "desconocida". */
+    private String normalizeIp(String ipOrigen) {
+        String ip = limit(ipOrigen, 45);
+        return ip == null ? UNKNOWN_IP : ip;
     }
 
     private LocalDateTime now() {
