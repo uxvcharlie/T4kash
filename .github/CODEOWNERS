@@ -1,0 +1,14 @@
+# Dueños por área: GitHub pide su revisión automáticamente en los PR que
+# tocan esos archivos. Solo puede figurar quien tenga acceso de escritura al
+# repo: cuando Rene sea colaborador, agregar @Renesls en backend/, mobile/ y
+# database/ (las áreas que más conoce).
+
+*                   @uxvcharlie
+
+/backend/           @uxvcharlie
+/database/          @uxvcharlie
+/mobile/            @uxvcharlie
+/ios/               @uxvcharlie
+/landing/           @uxvcharlie
+/.github/           @uxvcharlie
+/render.yaml        @uxvcharlie
