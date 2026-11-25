@@ -8,6 +8,12 @@ RUN ./mvnw -q -DskipTests package
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
+# El API corre con un usuario sin privilegios: si alguien lograra ejecutar
+# codigo dentro del contenedor, no tendria permisos de root.
+RUN groupadd --system t4kash && useradd --system --gid t4kash --no-create-home t4kash
+COPY --from=build --chown=t4kash:t4kash /app/target/*.jar app.jar
+USER t4kash
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Con memoria agotada el proceso termina y Render lo reinicia, en lugar de
+# quedar vivo pero sin responder. El healthcheck lo hace Render (/api/health).
+ENTRYPOINT ["java", "-XX:+ExitOnOutOfMemoryError", "-jar", "app.jar"]
