@@ -148,10 +148,11 @@ recorrer esta lista en un Mac:
 
 ## Limitaciones conocidas
 
-1. **Sin notificaciones push.** El backend no tiene registro de dispositivos ni
-   emisor de push (`docs/IOS_MIGRATION_AUDIT.md`, sección 10). No se inventó
-   ningún endpoint: la app usa las notificaciones internas de
-   `/api/notifications`. Añadir APNs exige cambios de backend y base de datos.
+1. **Sin notificaciones push en iOS.** El backend ya envía push por Firebase
+   Cloud Messaging y registra el dispositivo con `PUT /api/auth/me/fcm-token`,
+   pero la app iOS todavía no integra APNs/FCM (requiere una cuenta de Apple
+   Developer). Mientras tanto usa las notificaciones internas de
+   `/api/notifications`.
 2. **Sin refresh token.** El backend entrega un token opaco sin renovación. Un
    `401` limpia la sesión y devuelve al login, igual que en Android.
 3. **Paginación sin metadatos.** Las respuestas son arrays planos; la app asume
@@ -161,5 +162,6 @@ recorrer esta lista en un Mac:
    URLs y esas pantallas mostrarán el error que devuelva la API.
 5. **Arranque en frío de Render.** El plan gratuito puede tardar; los tiempos de
    espera están en 45 s y las pantallas muestran estado de carga explícito.
-6. **Calificaciones, reputación y puntos** no están implementados en el backend,
-   así que tampoco en iOS.
+6. **Calificaciones y reputación** existen en el backend
+   (`GET`/`POST /api/jobs/{id}/ratings`) y Android ya las usa, pero la app iOS
+   todavía no las implementa. Los puntos no existen en el backend.

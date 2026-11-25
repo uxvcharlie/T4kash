@@ -6,12 +6,12 @@
     <a href="./mobile"><img src="https://img.shields.io/badge/Android-Kotlin-3DDC84?logo=android&amp;logoColor=white" alt="Android Kotlin"></a>
     <a href="./backend"><img src="https://img.shields.io/badge/API-Spring_Boot-6DB33F?logo=springboot&amp;logoColor=white" alt="API Spring Boot"></a>
     <a href="./database"><img src="https://img.shields.io/badge/Database-PostgreSQL-4169E1?logo=postgresql&amp;logoColor=white" alt="PostgreSQL"></a>
+    <a href="https://github.com/uxvcharlie/T4kash/actions/workflows/ci.yml"><img src="https://github.com/uxvcharlie/T4kash/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
     <a href="#control-de-versiones"><img src="https://img.shields.io/badge/Commits-Conventional-191919" alt="Conventional Commits"></a>
   </p>
   <p>
     <a href="https://charlieuxv.github.io/t4kash-landing/">Landing</a> ·
     <a href="https://t4k4sh.onrender.com/api/health">API</a> ·
-    <a href="https://t4k4sh.onrender.com/swagger-ui/index.html">Swagger</a> ·
     <a href="https://www.figma.com/design/k5PeSZUFQJgIja3Mw2BpAw/Sin-t%C3%ADtulo?node-id=0-1">Figma</a>
   </p>
 </div>
@@ -72,7 +72,7 @@ flowchart LR
 | Moderación, reportes y administración | Operativo |
 | Calificaciones y reputación | Operativo |
 | KYC de identidad | Integrado con Didit Hosted Sessions |
-| Notificaciones push FCM | En integración en rama separada |
+| Notificaciones push FCM | Backend listo; Android necesita `google-services.json` y un servicio de mensajería |
 | Aplicación iOS (SwiftUI) | Implementada contra la misma API; pendiente de compilar y probar en Xcode |
 
 ## Funciones principales
@@ -229,15 +229,16 @@ controladores, servicios, repositorios, entidades y objetos de transferencia.
 ### Backend y PostgreSQL local
 
 ```powershell
-git clone https://github.com/Renesls/T4k4sh.git
-cd T4k4sh\backend
+git clone https://github.com/uxvcharlie/T4kash.git
+cd T4kash\backend
+copy .env.example .env
 docker compose up -d --build
 ```
 
 | Servicio | Dirección local |
 |---|---|
 | API | `http://localhost:8080/api/` |
-| Swagger | `http://localhost:8080/swagger-ui/index.html` |
+| Swagger (solo fuera del perfil `prod`) | `http://localhost:8080/swagger-ui/index.html` |
 | Health | `http://localhost:8080/api/health` |
 
 ```powershell
@@ -273,17 +274,20 @@ mobile/app/build/outputs/apk/debug/app-debug.apk
 <details>
 <summary><strong>Variables de entorno</strong></summary>
 
-Las referencias completas y valores de ejemplo están en
-[`backend/.env.example`](./backend/.env.example). Ningún secreto debe guardarse en Git.
+Todas las variables, con valores de ejemplo y explicación, están en
+[`backend/.env.example`](./backend/.env.example). Una prueba del backend falla si el
+código lee una variable que no está documentada ahí. Ningún secreto debe guardarse en Git.
 
 | Grupo | Variables principales |
 |---|---|
 | PostgreSQL | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` |
-| API | `SERVER_PORT`, `APP_PUBLIC_BASE_URL`, `APP_CORS_ALLOWED_ORIGINS` |
+| API | `SERVER_PORT`, `SPRING_PROFILES_ACTIVE`, `APP_PUBLIC_BASE_URL`, `APP_CORS_ALLOWED_ORIGINS`, `APP_HTTP_TRUSTED_PROXY_HOPS` |
+| Seguridad | `APP_AUTH_CODE_SECRET`, `APP_AUTH_LOGIN_MAX_ATTEMPTS*`, `APP_RATE_LIMIT_*` |
 | Supabase Storage | `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_STORAGE_BUCKET` |
-| Correo | `APP_MAIL_ENABLED`, `APP_MAIL_PROVIDER`, `APP_MAIL_FROM`, `BREVO_API_KEY` |
+| Correo | `APP_MAIL_ENABLED`, `APP_MAIL_PROVIDER`, `APP_MAIL_FROM`, `BREVO_API_KEY`, `SMTP_*` (respaldo) |
+| Push | `FIREBASE_CREDENTIALS_JSON` |
 | Didit | `APP_DIDIT_ENABLED`, `DIDIT_API_KEY`, `DIDIT_WORKFLOW_ID`, `DIDIT_WEBHOOK_SECRET`, `DIDIT_DOCUMENT_HASH_SECRET` |
-| Pagadito | `APP_PAGADITO_ENABLED`, `APP_PAGADITO_ENVIRONMENT`, `PAGADITO_UID`, `PAGADITO_WSK` |
+| Pagos | `APP_PAYMENTS_CLIENT_FEE_PERCENT`, `APP_PAYMENTS_STUDENT_FEE_PERCENT`, `APP_PAGADITO_ENABLED`, `APP_PAGADITO_ENVIRONMENT`, `PAGADITO_UID`, `PAGADITO_WSK` |
 | Administración | `APP_AUTH_EVALUATOR_EMAILS`, `APP_AUTH_ADMIN_EMAILS` |
 | Android | `T4KASH_API_BASE_URL` |
 
@@ -309,9 +313,10 @@ en [`docs/IOS_MIGRATION_AUDIT.md`](./docs/IOS_MIGRATION_AUDIT.md).
 
 ## Uso de la API
 
-La documentación interactiva contiene todos los contratos:
+La documentación interactiva (Swagger) contiene todos los contratos. En producción está
+apagada para no publicar el mapa de rutas; se consulta levantando el backend en local
+(`http://localhost:8080/swagger-ui/index.html`).
 
-- **Swagger publicado:** https://t4k4sh.onrender.com/swagger-ui/index.html
 - **Health check:** https://t4k4sh.onrender.com/api/health
 - **Base URL:** `https://t4k4sh.onrender.com/api/`
 
@@ -381,6 +386,9 @@ Swagger muestra método, cuerpo, respuesta, validaciones y autorización de cada
 | Contraseñas | Hash BCrypt; nunca se almacena la contraseña original |
 | Sesiones | Token aleatorio; PostgreSQL conserva solamente su hash SHA-256 |
 | Segundo paso | Código temporal enviado por correo después de validar credenciales |
+| Códigos de 6 dígitos | Se guardan como HMAC-SHA256 con sal y un secreto fuera de la base |
+| Intentos | Bloqueo por correo + IP y tope por cuenta; límite de peticiones por IP en `/api/auth/**` |
+| Ubicación | Dirección y coordenadas exactas solo para el cliente y el estudiante asignado; el resto ve la zona (~550 m) |
 | Autorización | Roles, propiedad del recurso y participación en el trabajo |
 | Entradas | Bean Validation, restricciones PostgreSQL y errores uniformes |
 | Archivos | Bucket privado, validación de tipo/tamaño y descarga mediante la API |
@@ -388,6 +396,7 @@ Swagger muestra método, cuerpo, respuesta, validaciones y autorización de cada
 | KYC | Datos biométricos procesados por Didit; T4KASH conserva referencias mínimas |
 | Base de datos | RLS bloquea el acceso con claves públicas de Supabase |
 | Secretos | Variables privadas de Render; nunca se incluyen en Android ni Git |
+| Producción | Perfil `prod`: sin Swagger, logs en INFO, sin CORS abierto y contenedor sin root |
 
 La aplicación toma el usuario desde la sesión autenticada. Android no puede declarar por
 su cuenta quién es propietario, estudiante, cliente o administrador de una operación.
@@ -396,14 +405,18 @@ su cuenta quién es propietario, estudiante, cliente o administrador de una oper
 
 ### Backend
 
-```powershell
+```bash
 cd backend
-.\mvnw.cmd test
+sh mvnw test        # Windows: .\mvnw.cmd test
 ```
 
 Las pruebas cubren identidad, seguridad, marketplace, entregas, finanzas, archivos,
-moderación, comunicación y Network. Las pruebas PostgreSQL utilizan Testcontainers cuando
-Docker está disponible.
+moderación, comunicación, Network, migraciones Flyway y el perfil `prod`. Las de
+integración usan PostgreSQL real con Testcontainers (Docker o Podman); sin Docker se
+omiten, pero en CI siempre corren.
+
+Cada PR corre el workflow [CI](./.github/workflows/ci.yml) (backend, Android y landing) y,
+si cambia `ios/`, el de [iOS](./.github/workflows/ios.yml) en un simulador de macOS.
 
 ### Android
 
@@ -443,15 +456,18 @@ las validaciones de formulario, el cuerpo multipart y los ViewModel de acceso y 
 
 Flujo de publicación:
 
-1. Aplicar de forma controlada el cambio requerido en Supabase.
-2. Subir el código mediante Pull Request.
-3. Render construye el `Dockerfile` y despliega la API.
-4. Verificar `/api/health` y Swagger.
+1. Si cambia la base, agregar una migración nueva en `backend/src/main/resources/db/migration`.
+   No se ejecuta nada a mano en Supabase: Flyway la aplica al arrancar.
+2. Subir el código mediante Pull Request y esperar el CI en verde.
+3. Al fusionar en `main`, Render construye el `Dockerfile` y despliega la API.
+4. Verificar `/api/health` y probar registro e inicio de sesión.
 5. Compilar Android apuntando a la URL de Render.
 6. Ejecutar una prueba funcional desde el emulador o teléfono.
 
-El plan gratuito de Render puede suspender la instancia por inactividad; la primera
-solicitud puede tardar mientras el servicio vuelve a iniciar.
+El plan gratuito de Render suspende la instancia tras unos 15 minutos sin tráfico. El
+workflow [mantener-demo-despierta](./.github/workflows/mantener-demo-despierta.yml) llama
+al API cada 10 minutos, y Android muestra "Despertando el servidor…" si el primer arranque
+tarda.
 
 ## Base de datos y diagramas
 
@@ -477,8 +493,14 @@ Los diagramas ERD, clases, actividades y casos de uso se encuentran en
 
 ## Control de versiones
 
-El equipo trabaja con ramas, Pull Requests y Conventional Commits. Cada rama debe expresar
-su propósito, no solamente el nombre de quien trabaja en ella.
+El equipo trabaja con GitHub Flow, Pull Requests y Conventional Commits:
+
+- `main` está protegida: todo cambio entra por Pull Request, sin *force push* y con
+  historial lineal (**Rebase and merge**).
+- Las ramas son cortas y expresan su propósito (`feat/`, `fix/`, `docs/`, `chore/`,
+  `test/`, `ci/`), nunca el nombre de una persona. Se borran al fusionar.
+- La [plantilla de PR](./.github/pull_request_template.md) recuerda migraciones, variables
+  de entorno y compatibilidad con las apps. Dependabot propone actualizaciones cada semana.
 
 ```text
 feat/marketplace-tareas-rapidas
