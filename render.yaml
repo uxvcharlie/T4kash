@@ -31,6 +31,10 @@ services:
         sync: false
       - key: SUPABASE_STORAGE_BUCKET
         value: "t4kash-attachments"
+      # JSON de la cuenta de servicio de Firebase Admin en una sola linea.
+      # Vacio desactiva el push sin romper el arranque.
+      - key: FIREBASE_CREDENTIALS_JSON
+        sync: false
       - key: APP_AUTH_EVALUATOR_EMAILS
         sync: false
       - key: APP_AUTH_ADMIN_EMAILS
@@ -57,8 +61,12 @@ services:
         sync: false
       - key: DIDIT_DOCUMENT_HASH_SECRET
         sync: false
-      - key: APP_PAYMENTS_PLATFORM_FEE_PERCENT
-        value: "1.00"
+      # Take rate del 15 %: 10 % lo paga el cliente encima del precio y 5 % se
+      # retiene al estudiante. El codigo ya no lee APP_PAYMENTS_PLATFORM_FEE_PERCENT.
+      - key: APP_PAYMENTS_CLIENT_FEE_PERCENT
+        value: "10.00"
+      - key: APP_PAYMENTS_STUDENT_FEE_PERCENT
+        value: "5.00"
       - key: APP_PAGADITO_ENABLED
         sync: false
       - key: APP_PAGADITO_ENVIRONMENT
