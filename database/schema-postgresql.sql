@@ -115,7 +115,9 @@ CREATE TABLE usuarios (
     fecha_registro timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     estado_usuario varchar(30) NOT NULL DEFAULT 'ACTIVO',
     id_universidad integer,
-
+    -- Token FCM del dispositivo activo para notificaciones push. Si esta
+    -- columna se agrega a una base ya desplegada, usar:
+    --   ALTER TABLE usuarios ADD COLUMN fcm_token varchar(255);
     fcm_token varchar(255),
     CONSTRAINT pk_usuarios PRIMARY KEY (id_usuario),
     CONSTRAINT uq_usuarios_uuid_publico UNIQUE (uuid_publico),
@@ -281,8 +283,10 @@ CREATE TABLE pagos (
     tipo_cambio numeric(18,8),
     monto_procesamiento numeric(12,2),
     monto_estudiante numeric(12,2) NOT NULL,
-    porcentaje_comision_plataforma numeric(5,2) NOT NULL DEFAULT 1.00,
+    porcentaje_comision_plataforma numeric(5,2) NOT NULL DEFAULT 15.00,
     comision_plataforma numeric(12,2) NOT NULL DEFAULT 0,
+    comision_cliente numeric(12,2) NOT NULL DEFAULT 0,
+    comision_estudiante numeric(12,2) NOT NULL DEFAULT 0,
     comision_procesador numeric(12,2) NOT NULL DEFAULT 0,
     impuesto_procesador numeric(12,2) NOT NULL DEFAULT 0,
     monto_total_cliente numeric(12,2) NOT NULL,
@@ -303,6 +307,9 @@ CREATE TABLE pagos (
         monto_estudiante >= 0
         AND porcentaje_comision_plataforma BETWEEN 0 AND 100
         AND comision_plataforma >= 0
+        AND comision_cliente >= 0
+        AND comision_estudiante >= 0
+        AND comision_plataforma = comision_cliente + comision_estudiante
         AND comision_procesador >= 0
         AND impuesto_procesador >= 0
         AND monto_total_cliente = monto_estudiante

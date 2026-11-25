@@ -6,6 +6,8 @@ import com.t4kash.api.communication.entity.Notificacion;
 import com.t4kash.api.communication.repository.NotificacionRepository;
 import com.t4kash.api.exception.ForbiddenOperationException;
 import com.t4kash.api.exception.ResourceNotFoundException;
+import com.t4kash.api.marketplace.entity.Usuario;
+import com.t4kash.api.marketplace.repository.UsuarioRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,9 +17,17 @@ import java.util.List;
 @Service
 public class NotificationService {
     private final NotificacionRepository notificationRepository;
+    private final UsuarioRepository usuarioRepository;
+    private final FcmService fcmService;
 
-    public NotificationService(NotificacionRepository notificationRepository) {
+    public NotificationService(
+            NotificacionRepository notificationRepository,
+            UsuarioRepository usuarioRepository,
+            FcmService fcmService
+    ) {
         this.notificationRepository = notificationRepository;
+        this.usuarioRepository = usuarioRepository;
+        this.fcmService = fcmService;
     }
 
     @Transactional
@@ -29,6 +39,12 @@ public class NotificationService {
         notification.setLeida(false);
         notification.setFechaCreacion(LocalDateTime.now());
         notificationRepository.save(notification);
+
+        Usuario usuarioDestino = usuarioRepository.findById(userId).orElse(null);
+        String token = usuarioDestino == null ? null : usuarioDestino.getFcmToken();
+        if (token != null && !token.isBlank()) {
+            fcmService.sendPushNotification(token, title, message);
+        }
     }
 
     @Transactional(readOnly = true)

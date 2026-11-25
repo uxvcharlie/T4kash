@@ -10,13 +10,16 @@ import com.t4kash.api.marketplace.dto.CategoriaResponse;
 import com.t4kash.api.marketplace.dto.CreateApplicationRequest;
 import com.t4kash.api.marketplace.dto.CreateDeliveryCommentRequest;
 import com.t4kash.api.marketplace.dto.CreateDeliveryRequest;
+import com.t4kash.api.marketplace.dto.CreateRatingRequest;
 import com.t4kash.api.marketplace.dto.CreateTaskRequest;
 import com.t4kash.api.marketplace.dto.DeliveryResponse;
 import com.t4kash.api.marketplace.dto.JobResponse;
 import com.t4kash.api.marketplace.dto.QuickTaskResponse;
+import com.t4kash.api.marketplace.dto.RatingResponse;
 import com.t4kash.api.marketplace.dto.RequestDeliveryChangesRequest;
 import com.t4kash.api.marketplace.dto.TaskResponse;
 import com.t4kash.api.marketplace.service.ApplicationService;
+import com.t4kash.api.marketplace.service.CalificacionService;
 import com.t4kash.api.marketplace.service.DeliveryService;
 import com.t4kash.api.marketplace.service.JobService;
 import com.t4kash.api.marketplace.service.TaskService;
@@ -47,6 +50,7 @@ public class MarketplaceController {
     private final ApplicationService applicationService;
     private final JobService jobService;
     private final DeliveryService deliveryService;
+    private final CalificacionService calificacionService;
     private final PublicProfileService profileService;
 
     public MarketplaceController(
@@ -54,12 +58,14 @@ public class MarketplaceController {
             ApplicationService applicationService,
             JobService jobService,
             DeliveryService deliveryService,
+            CalificacionService calificacionService,
             PublicProfileService profileService
     ) {
         this.taskService = taskService;
         this.applicationService = applicationService;
         this.jobService = jobService;
         this.deliveryService = deliveryService;
+        this.calificacionService = calificacionService;
         this.profileService = profileService;
     }
 
@@ -243,6 +249,28 @@ public class MarketplaceController {
         return deliveryService.approveDelivery(user.idUsuario(), idEntrega);
     }
 
+    @GetMapping("/jobs/{idTrabajo}/ratings")
+    @Operation(summary = "Listar calificaciones de un trabajo")
+    @SecurityRequirement(name = "bearerAuth")
+    public List<RatingResponse> listRatings(
+            @CurrentUser AuthenticatedUserResponse user,
+            @PathVariable Integer idTrabajo
+    ) {
+        return enrichRatings(calificacionService.listarPorTrabajo(user.idUsuario(), idTrabajo));
+    }
+
+    @PostMapping("/jobs/{idTrabajo}/ratings")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Calificar un trabajo finalizado")
+    @SecurityRequirement(name = "bearerAuth")
+    public RatingResponse createRating(
+            @CurrentUser AuthenticatedUserResponse user,
+            @PathVariable Integer idTrabajo,
+            @Valid @RequestBody CreateRatingRequest request
+    ) {
+        return enrichRating(calificacionService.crear(user.idUsuario(), idTrabajo, request));
+    }
+
     @PostMapping("/deliveries/{idEntrega}/request-changes")
     @Operation(summary = "Solicitar correcciones sobre una entrega")
     @SecurityRequirement(name = "bearerAuth")
@@ -317,5 +345,18 @@ public class MarketplaceController {
 
     private JobResponse enrichJob(JobResponse job) {
         return job.withStudent(profileService.getIdentity(job.idEstudiante()));
+    }
+
+    private List<RatingResponse> enrichRatings(List<RatingResponse> ratings) {
+        Map<Integer, PublicIdentityResponse> identities = profileService.getIdentities(
+                ratings.stream().map(RatingResponse::idCalificador).toList()
+        );
+        return ratings.stream()
+                .map(rating -> rating.withCalificador(identities.get(rating.idCalificador())))
+                .toList();
+    }
+
+    private RatingResponse enrichRating(RatingResponse rating) {
+        return rating.withCalificador(profileService.getIdentity(rating.idCalificador()));
     }
 }

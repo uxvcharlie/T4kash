@@ -81,6 +81,8 @@ data class PaymentDto(
     val montoEstudiante: Double,
     val porcentajeComisionPlataforma: Double,
     val comisionPlataforma: Double,
+    val comisionCliente: Double = 0.0,
+    val comisionEstudiante: Double = 0.0,
     val comisionProcesador: Double,
     val impuestoProcesador: Double,
     val montoTotalCliente: Double,
@@ -228,6 +230,22 @@ data class DeliveryDto(
     val estadoEntrega: String,
     val comentarios: List<DeliveryCommentDto> = emptyList(),
     val revisiones: List<DeliveryReviewDto> = emptyList()
+)
+
+data class CreateRatingRequest(
+    val puntuacion: Int,
+    val comentario: String?
+)
+
+data class RatingDto(
+    val idCalificacion: Int,
+    val idTrabajo: Int,
+    val idCalificador: Int,
+    val idCalificado: Int,
+    val puntuacion: Int,
+    val comentario: String?,
+    val fechaCalificacion: String,
+    val calificador: PublicIdentityDto?
 )
 
 data class PendingAttachment(

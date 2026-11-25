@@ -26,6 +26,8 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RateReview
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -68,6 +70,7 @@ import com.t4kash.app.ui.model.DeliveryDto
 import com.t4kash.app.ui.model.JobDto
 import com.t4kash.app.ui.model.PaymentDto
 import com.t4kash.app.ui.model.PendingAttachment
+import com.t4kash.app.ui.model.RatingDto
 import com.t4kash.app.ui.model.TaskDto
 import com.t4kash.app.ui.theme.T4Background
 import com.t4kash.app.ui.theme.T4Amber
@@ -102,6 +105,7 @@ fun JobDetailScreen(
         mutableStateOf<List<PendingAttachment>>(emptyList())
     }
     var pendingApproval by remember { mutableStateOf<DeliveryDto?>(null) }
+    var showRatingDialog by remember(jobId) { mutableStateOf(false) }
     var pendingChanges by remember { mutableStateOf<DeliveryDto?>(null) }
     var changeObservation by remember { mutableStateOf("") }
     var changeObservationError by remember { mutableStateOf<String?>(null) }
@@ -111,11 +115,13 @@ fun JobDetailScreen(
 
     LaunchedEffect(jobId) {
         viewModel.clearDeliveryFeedback()
+        viewModel.clearRatingFeedback()
         if (job == null) {
             viewModel.refreshJobs(force = true)
         }
         viewModel.loadDeliveries(jobId)
         viewModel.loadJobAttachments(jobId)
+        viewModel.loadRatings(jobId)
     }
 
     LaunchedEffect(state.deliveryActionMessage) {
@@ -124,6 +130,12 @@ fun JobDetailScreen(
             pendingAttachments = emptyList()
             validationError = null
             focusManager.clearFocus()
+        }
+    }
+
+    LaunchedEffect(state.ratingActionMessage) {
+        if (state.ratingActionMessage != null) {
+            showRatingDialog = false
         }
     }
 
@@ -180,8 +192,9 @@ fun JobDetailScreen(
             }
 
             else -> {
-                val isStudent = job.idEstudiante == UserSession.requireUserId()
-                val isClient = task?.idCliente == UserSession.requireUserId()
+                val currentUserId = UserSession.requireUserId()
+                val isStudent = job.idEstudiante == currentUserId
+                val isClient = task?.idCliente == currentUserId
                 val hasPendingReview = state.deliveries.any {
                     it.estadoEntrega.equals("ENVIADA", ignoreCase = true)
                 }
@@ -194,6 +207,13 @@ fun JobDetailScreen(
                 }
                 val protectedPayment = job.pago?.takeUnless {
                     it.metodoPago.equals("EFECTIVO", ignoreCase = true)
+                }
+                val jobFinished = job.estadoTrabajo.equals("FINALIZADO", ignoreCase = true)
+                val myRating = state.ratings.firstOrNull {
+                    it.idCalificador == currentUserId
+                }
+                val otherRating = state.ratings.firstOrNull {
+                    it.idCalificador != currentUserId
                 }
 
                 LazyColumn(
@@ -229,6 +249,19 @@ fun JobDetailScreen(
                                         payment.idPago
                                     )
                                 },
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        }
+                    }
+
+                    if (jobFinished && (isStudent || isClient)) {
+                        item {
+                            RatingSection(
+                                myRating = myRating,
+                                otherRating = otherRating,
+                                isLoading = state.isLoadingRatings,
+                                error = state.ratingsError,
+                                onRate = { showRatingDialog = true },
                                 modifier = Modifier.padding(horizontal = 16.dp)
                             )
                         }
@@ -611,6 +644,19 @@ fun JobDetailScreen(
             dismissButton = {
                 TextButton(onClick = { pendingComment = null }) {
                     Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (showRatingDialog) {
+        val jobForRating = state.jobs.firstOrNull { it.idTrabajo == jobId }
+        RatingDialog(
+            isSubmitting = state.isSubmittingRating,
+            onDismiss = { showRatingDialog = false },
+            onSubmit = { score, comment ->
+                jobForRating?.let {
+                    viewModel.submitRating(it.idTrabajo, score, comment)
                 }
             }
         )
@@ -1266,7 +1312,193 @@ private fun DeliveryCard(
 }
 
 private const val MIN_DELIVERY_LENGTH = 10
+
+@Composable
+private fun RatingSection(
+    myRating: RatingDto?,
+    otherRating: RatingDto?,
+    isLoading: Boolean,
+    error: String?,
+    onRate: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = T4Surface),
+        border = BorderStroke(1.dp, T4Border.copy(alpha = 0.7f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.RateReview,
+                    contentDescription = null,
+                    tint = T4MintDark
+                )
+                Text(
+                    text = "Calificacion",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = T4Text,
+                    modifier = Modifier.weight(1f)
+                )
+                if (isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                }
+            }
+
+            if (myRating != null) {
+                StarRow(score = myRating.puntuacion)
+                Text(
+                    text = "Ya calificaste este trabajo.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = T4TextMuted
+                )
+                myRating.comentario?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = T4Text)
+                }
+            } else {
+                Text(
+                    text = "El trabajo finalizo. Contale a la comunidad como fue tu experiencia.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = T4TextMuted
+                )
+                Button(onClick = onRate, modifier = Modifier.fillMaxWidth()) {
+                    Icon(imageVector = Icons.Filled.Star, contentDescription = null)
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text("Calificar")
+                }
+            }
+
+            otherRating?.let { rating ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Te calificaron",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = T4TextMuted
+                    )
+                    StarRow(score = rating.puntuacion)
+                    rating.comentario?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = T4Text)
+                    }
+                }
+            }
+
+            error?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = T4Danger)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StarRow(score: Int, modifier: Modifier = Modifier) {
+    Row(modifier = modifier) {
+        repeat(5) { index ->
+            Icon(
+                imageVector = if (index < score) Icons.Filled.Star else Icons.Filled.StarBorder,
+                contentDescription = null,
+                tint = if (index < score) T4MintDark else T4TextMuted,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun RatingDialog(
+    isSubmitting: Boolean,
+    onDismiss: () -> Unit,
+    onSubmit: (Int, String?) -> Unit
+) {
+    var score by remember { mutableStateOf(0) }
+    var comment by remember { mutableStateOf("") }
+    var validationError by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = { if (!isSubmitting) onDismiss() },
+        icon = { Icon(imageVector = Icons.Filled.Star, contentDescription = null, tint = T4MintDark) },
+        title = { Text("Calificar trabajo") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    repeat(5) { index ->
+                        val filled = index < score
+                        IconButton(
+                            onClick = {
+                                score = index + 1
+                                validationError = null
+                            },
+                            enabled = !isSubmitting
+                        ) {
+                            Icon(
+                                imageVector = if (filled) Icons.Filled.Star else Icons.Filled.StarBorder,
+                                contentDescription = "${index + 1} estrellas",
+                                tint = if (filled) T4MintDark else T4TextMuted
+                            )
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = comment,
+                    onValueChange = { if (it.length <= MAX_RATING_COMMENT_LENGTH) comment = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Comentario (opcional)") },
+                    supportingText = {
+                        Text(
+                            validationError
+                                ?: "${comment.length}/$MAX_RATING_COMMENT_LENGTH"
+                        )
+                    },
+                    isError = validationError != null,
+                    minLines = 2,
+                    maxLines = 4,
+                    enabled = !isSubmitting,
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (score < 1) {
+                        validationError = "Selecciona una puntuacion de 1 a 5 estrellas."
+                    } else {
+                        onSubmit(score, comment.trim().takeIf { it.isNotEmpty() })
+                    }
+                },
+                enabled = !isSubmitting
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text("Enviar")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isSubmitting) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
 private const val MAX_DELIVERY_LENGTH = 1000
+private const val MAX_RATING_COMMENT_LENGTH = 500
 private const val MIN_REVIEW_LENGTH = 10
 private const val MIN_COMMENT_LENGTH = 2
 private const val MAX_REVIEW_LENGTH = 700

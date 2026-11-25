@@ -45,6 +45,9 @@ public class Usuario {
     @Column(name = "id_universidad")
     private Integer idUniversidad;
 
+    @Column(name = "fcm_token", length = 255)
+    private String fcmToken;
+
     public Integer getIdUsuario() {
         return idUsuario;
     }
@@ -123,5 +126,13 @@ public class Usuario {
 
     public void setIdUniversidad(Integer idUniversidad) {
         this.idUniversidad = idUniversidad;
+    }
+
+    public String getFcmToken() {
+        return fcmToken;
+    }
+
+    public void setFcmToken(String fcmToken) {
+        this.fcmToken = fcmToken;
     }
 }
