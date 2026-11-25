@@ -20,7 +20,10 @@ public class AuthenticatedUserService {
     }
 
     public AuthenticatedUserResponse requireRole(String authorization, String requiredRole) {
-        AuthenticatedUserResponse user = requireUser(authorization);
+        return requireRole(requireUser(authorization), requiredRole);
+    }
+
+    public AuthenticatedUserResponse requireRole(AuthenticatedUserResponse user, String requiredRole) {
         boolean hasRole = user.roles().stream()
                 .anyMatch(role -> role.equalsIgnoreCase(requiredRole));
         if (!hasRole) {
