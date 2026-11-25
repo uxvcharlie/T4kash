@@ -10,6 +10,7 @@ import com.t4kash.api.marketplace.entity.TrabajoAsignado;
 import com.t4kash.api.marketplace.repository.ArchivoAdjuntoRepository;
 import com.t4kash.api.marketplace.repository.EntregaRepository;
 import com.t4kash.api.marketplace.repository.TareaRepository;
+import com.t4kash.api.marketplace.repository.PostulacionRepository;
 import com.t4kash.api.marketplace.repository.TrabajoAsignadoRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,10 +59,13 @@ public class AttachmentService {
             Map.entry("zip", "application/zip")
     );
 
+    private static final String PUBLISHED_TASK = "PUBLICADA";
+
     private final ArchivoAdjuntoRepository archivoRepository;
     private final TareaRepository tareaRepository;
     private final EntregaRepository entregaRepository;
     private final TrabajoAsignadoRepository trabajoRepository;
+    private final PostulacionRepository postulacionRepository;
     private final ObjectStorage objectStorage;
 
     public AttachmentService(
@@ -69,12 +73,14 @@ public class AttachmentService {
             TareaRepository tareaRepository,
             EntregaRepository entregaRepository,
             TrabajoAsignadoRepository trabajoRepository,
+            PostulacionRepository postulacionRepository,
             ObjectStorage objectStorage
     ) {
         this.archivoRepository = archivoRepository;
         this.tareaRepository = tareaRepository;
         this.entregaRepository = entregaRepository;
         this.trabajoRepository = trabajoRepository;
+        this.postulacionRepository = postulacionRepository;
         this.objectStorage = objectStorage;
     }
 
@@ -118,10 +124,12 @@ public class AttachmentService {
     }
 
     @Transactional(readOnly = true)
-    public List<AttachmentResponse> listTaskAttachments(Integer taskId) {
-        if (!tareaRepository.existsById(taskId)) {
-            throw new ResourceNotFoundException("La tarea indicada no existe.");
-        }
+    public List<AttachmentResponse> listTaskAttachments(
+            Integer taskId,
+            Integer userId,
+            boolean administrator
+    ) {
+        requireTaskAttachmentAccess(findTask(taskId), userId, administrator);
         return archivoRepository
                 .findByIdTareaAndEstadoArchivoOrderByFechaSubidaDesc(taskId, ACTIVE_STATUS)
                 .stream()
@@ -317,7 +325,7 @@ public class AttachmentService {
             boolean administrator
     ) {
         if (attachment.getIdTarea() != null) {
-            findTask(attachment.getIdTarea());
+            requireTaskAttachmentAccess(findTask(attachment.getIdTarea()), userId, administrator);
             return;
         }
         if (attachment.getIdEntrega() != null) {
@@ -335,6 +343,26 @@ public class AttachmentService {
         }
         throw new ForbiddenOperationException(
                 "El archivo no esta asociado a un recurso accesible."
+        );
+    }
+
+    /**
+     * Los adjuntos de una tarea son parte de la oferta mientras esta publicada.
+     * Despues solo los ven el cliente, un administrador, quienes se postularon
+     * y el estudiante asignado.
+     */
+    private void requireTaskAttachmentAccess(Tarea tarea, Integer userId, boolean administrator) {
+        if (administrator
+                || tarea.getIdCliente().equals(userId)
+                || PUBLISHED_TASK.equals(tarea.getEstadoTarea())
+                || postulacionRepository.existsByIdTareaAndIdEstudiante(tarea.getIdTarea(), userId)
+                || trabajoRepository.findByIdTarea(tarea.getIdTarea())
+                        .map(job -> job.getIdEstudiante().equals(userId))
+                        .orElse(false)) {
+            return;
+        }
+        throw new ForbiddenOperationException(
+                "Solo las personas que participan en esta tarea pueden ver sus archivos."
         );
     }
 

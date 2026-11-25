@@ -9,6 +9,8 @@ import java.util.Optional;
 public interface PostulacionRepository extends JpaRepository<Postulacion, Integer> {
     List<Postulacion> findByIdTareaOrderByFechaPostulacionDesc(Integer idTarea);
 
+    boolean existsByIdTareaAndIdEstudiante(Integer idTarea, Integer idEstudiante);
+
     List<Postulacion> findByIdTareaAndEstadoPostulacionAndIdPostulacionNot(
             Integer idTarea,
             String estadoPostulacion,
