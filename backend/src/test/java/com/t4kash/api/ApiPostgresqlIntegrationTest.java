@@ -1,6 +1,7 @@
 package com.t4kash.api;
 
 import com.t4kash.api.identity.service.VerificationEmailService;
+import com.t4kash.api.maintenance.MaintenanceJobs;
 import com.t4kash.api.network.entity.Publicacion;
 import com.t4kash.api.network.repository.PublicacionRepository;
 import org.hamcrest.Matchers;
@@ -56,6 +57,8 @@ class ApiPostgresqlIntegrationTest {
         // El filtro por IP tiene su propia prueba; aqui todas las peticiones salen de 127.0.0.1.
         registry.add("app.rate-limit.auth-requests-per-minute", () -> "1000");
         registry.add("app.rate-limit.email-requests-per-window", () -> "1000");
+        // Las tareas programadas se llaman a mano en las pruebas que las necesitan.
+        registry.add("app.scheduling.enabled", () -> "false");
     }
 
     @Autowired
@@ -69,6 +72,9 @@ class ApiPostgresqlIntegrationTest {
 
     @MockitoBean
     private VerificationEmailService emailService;
+
+    @Autowired
+    private MaintenanceJobs maintenanceJobs;
 
     @Test
     void bootsWithTheProductionSchemaAndExposesHealth() throws Exception {
@@ -319,6 +325,33 @@ class ApiPostgresqlIntegrationTest {
     }
 
     @Test
+    void maintenanceClosesExpiredTasksWithoutTheListingWritingAnything() throws Exception {
+        Session owner = registerAndLogIn("cliente.vencida@gmail.com");
+        String created = mockMvc.perform(post("/api/tasks")
+                        .header(HttpHeaders.AUTHORIZATION, owner.bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"titulo":"Tarea que vence","descripcion":"Prueba de vencimiento",
+                                 "presupuesto":100,"idCategoria":1,"tipoOportunidad":"TAREA",
+                                 "modalidad":"REMOTA"}
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        Integer taskId = JsonPath.read(created, "$.idTarea");
+        jdbcTemplate.update(
+                "UPDATE tareas SET fecha_limite_postulacion = now() - interval '1 hour' WHERE id_tarea = ?",
+                taskId
+        );
+
+        mockMvc.perform(get("/api/tasks").queryParam("size", "100")).andExpect(status().isOk());
+        assertThat(taskState(taskId)).isEqualTo("PUBLICADA");
+
+        assertThat(maintenanceJobs.closeExpiredTasks()).isGreaterThanOrEqualTo(1);
+        assertThat(taskState(taskId)).isEqualTo("CERRADA");
+        assertThat(maintenanceJobs.warnAboutLongHeldFunds()).isZero();
+    }
+
+    @Test
     void marketplaceListsRemainBounded() throws Exception {
         mockMvc.perform(get("/api/tasks")
                         .queryParam("page", "0")
@@ -446,6 +479,14 @@ class ApiPostgresqlIntegrationTest {
                 .content("""
                         {"correo":"%s","password":"%s"}
                         """.formatted(correo, password)));
+    }
+
+    private String taskState(Integer taskId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT estado_tarea FROM tareas WHERE id_tarea = ?",
+                String.class,
+                taskId
+        );
     }
 
     private String fcmTokenOf(Integer userId) {
