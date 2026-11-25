@@ -86,7 +86,7 @@ class ApiPostgresqlIntegrationTest {
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank",
                 String.class
         );
-        assertThat(appliedVersions).containsExactly("1", "2");
+        assertThat(appliedVersions).containsExactly("1", "2", "3");
 
         assertThat(tableCount).isEqualTo(54);
         mockMvc.perform(get("/api/health"))
@@ -120,6 +120,14 @@ class ApiPostgresqlIntegrationTest {
                 correo
         );
         assertThat(publicId).isNotNull();
+
+        // El codigo no queda en la base: solo su HMAC con sal.
+        String storedCode = jdbcTemplate.queryForObject(
+                "SELECT codigo_verificacion FROM verificaciones_usuario WHERE correo_institucional = ?",
+                String.class,
+                correo
+        );
+        assertThat(storedCode).startsWith("v1$").doesNotContain(registrationCode.getValue());
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

@@ -25,6 +25,7 @@ public class PasswordResetService {
     private final UsuarioRepository usuarioRepository;
     private final TokenRecuperacionPasswordRepository recoveryTokenRepository;
     private final SessionTokenService tokenService;
+    private final VerificationCodeHasher codeHasher;
     private final VerificationCodeService codeService;
     private final VerificationEmailService emailService;
     private final LoginSecurityService loginSecurityService;
@@ -37,6 +38,7 @@ public class PasswordResetService {
             UsuarioRepository usuarioRepository,
             TokenRecuperacionPasswordRepository recoveryTokenRepository,
             SessionTokenService tokenService,
+            VerificationCodeHasher codeHasher,
             VerificationCodeService codeService,
             VerificationEmailService emailService,
             LoginSecurityService loginSecurityService,
@@ -47,6 +49,7 @@ public class PasswordResetService {
         this.usuarioRepository = usuarioRepository;
         this.recoveryTokenRepository = recoveryTokenRepository;
         this.tokenService = tokenService;
+        this.codeHasher = codeHasher;
         this.codeService = codeService;
         this.emailService = emailService;
         this.loginSecurityService = loginSecurityService;
@@ -88,7 +91,7 @@ public class PasswordResetService {
         String code = codeService.generate();
         TokenRecuperacionPassword recovery = new TokenRecuperacionPassword();
         recovery.setIdUsuario(usuario.getIdUsuario());
-        recovery.setTokenHash(tokenService.hash(code));
+        recovery.setTokenHash(codeHasher.hash(VerificationCodeHasher.PASSWORD_RESET, usuario.getCorreo(), code));
         recovery.setFechaCreacion(now);
         recovery.setFechaExpiracion(now.plusMinutes(passwordResetMinutes));
         recovery.setUsado(false);
@@ -118,7 +121,7 @@ public class PasswordResetService {
                 ));
 
         if (!recovery.getFechaExpiracion().isAfter(now())
-                || !tokenService.matches(request.codigo(), recovery.getTokenHash())) {
+                || !matchesRecoveryCode(usuario.getCorreo(), request.codigo(), recovery.getTokenHash())) {
             loginSecurityService.recordFailure(
                     usuario.getIdUsuario(),
                     correo,
@@ -147,6 +150,15 @@ public class PasswordResetService {
         return new MessageResponse(
                 "Contrasena actualizada. Ya puedes iniciar sesion."
         );
+    }
+
+    /**
+     * Acepta el formato nuevo (HMAC con sal) y, solo durante la transicion, el
+     * SHA-256 que se guardaba antes. Los codigos viejos vencen en minutos.
+     */
+    private boolean matchesRecoveryCode(String correo, String rawCode, String stored) {
+        return codeHasher.matches(VerificationCodeHasher.PASSWORD_RESET, correo, rawCode, stored)
+                || tokenService.matches(rawCode, stored);
     }
 
     private String normalizeEmail(String correo) {

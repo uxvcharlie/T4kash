@@ -121,15 +121,16 @@ public class LoginService {
             previous.setEstadoVerificacion(REPLACED_VERIFICATION);
             verificacionRepository.save(previous);
         }
-        VerificacionUsuario verification = verificationRecordService.create(
+        VerificationRecordService.IssuedVerification issued = verificationRecordService.create(
                 usuario,
                 now,
                 LOGIN_VERIFICATION,
                 twoFactorMinutes
         );
+        VerificacionUsuario verification = issued.verification();
         emailService.sendLoginCode(
                 correo,
-                verification.getCodigoVerificacion(),
+                issued.code(),
                 twoFactorMinutes
         );
         return loginChallengeResponse(verification);
@@ -168,7 +169,7 @@ public class LoginService {
             );
             throw new InvalidCredentialsException("El codigo no es valido o ha expirado.");
         }
-        if (!verification.getCodigoVerificacion().equals(request.codigo())) {
+        if (!verificationRecordService.matches(verification, request.codigo())) {
             loginSecurityService.recordFailure(
                     usuario.getIdUsuario(),
                     correo,
@@ -221,15 +222,16 @@ public class LoginService {
             verificacionRepository.save(previous);
         }
 
-        VerificacionUsuario verification = verificationRecordService.create(
+        VerificationRecordService.IssuedVerification issued = verificationRecordService.create(
                 usuario,
                 now,
                 LOGIN_VERIFICATION,
                 twoFactorMinutes
         );
+        VerificacionUsuario verification = issued.verification();
         emailService.sendLoginCode(
                 correo,
-                verification.getCodigoVerificacion(),
+                issued.code(),
                 twoFactorMinutes
         );
         return loginChallengeResponse(verification);
