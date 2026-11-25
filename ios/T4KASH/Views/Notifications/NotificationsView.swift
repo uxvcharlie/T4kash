@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Notificaciones internas.
 ///
-/// El backend no tiene registro de dispositivos ni envío push (ni APNs ni FCM),
-/// así que este es el canal real de avisos: se consultan y se marcan leídas
+/// El backend envía push por FCM, pero la app iOS todavía no integra APNs/FCM,
+/// así que en iOS este es el canal de avisos: se consultan y se marcan leídas
 /// contra `/api/notifications`.
 struct NotificationsView: View {
     @Binding var unreadCount: Int
