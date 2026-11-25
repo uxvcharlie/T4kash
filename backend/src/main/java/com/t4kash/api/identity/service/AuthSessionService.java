@@ -106,6 +106,11 @@ public class AuthSessionService {
         sesion.setEstadoSesion("CERRADA");
         sesion.setFechaCierre(now());
         sesionRepository.save(sesion);
+        // El dispositivo deja de recibir las notificaciones de la cuenta que salio.
+        usuarioRepository.findById(sesion.getIdUsuario()).ifPresent(usuario -> {
+            usuario.setFcmToken(null);
+            usuarioRepository.save(usuario);
+        });
     }
 
     public void closeActiveSessions(Integer userId, LocalDateTime now) {
@@ -184,13 +189,20 @@ public class AuthSessionService {
         return value.length() <= maxLength ? value : value.substring(0, maxLength);
     }
 
+    /**
+     * Guarda el token FCM de la cuenta autenticada. El id debe venir siempre de
+     * la sesion, nunca del cliente.
+     */
     @Transactional
-    public void actualizarTokenFirebase(Long idUsuario, String token) {
+    public void actualizarTokenFirebase(Integer idUsuario, String token) {
+        Usuario usuario = usuarioRepository.findById(idUsuario)
+                .orElseThrow(() -> new ResourceNotFoundException("La cuenta de la sesion ya no existe."));
 
-        Usuario usuario = usuarioRepository.findById(Math.toIntExact(idUsuario))
-                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado con ID: " + idUsuario));
-
-        usuario.setFcmToken(token);
+        String normalized = token == null ? null : token.trim();
+        if (normalized != null && !normalized.isEmpty()) {
+            usuarioRepository.releaseFcmTokenFromOtherUsers(normalized, idUsuario);
+        }
+        usuario.setFcmToken(normalized == null || normalized.isEmpty() ? null : normalized);
         usuarioRepository.save(usuario);
     }
 }

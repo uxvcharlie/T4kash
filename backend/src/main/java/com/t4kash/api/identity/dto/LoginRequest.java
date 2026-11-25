@@ -9,8 +9,6 @@ public record LoginRequest(
         String correo,
 
         @NotBlank(message = "La contrasena es obligatoria.")
-        String password,
-
-        String fcmToken
+        String password
 ) {
 }

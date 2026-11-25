@@ -1,5 +1,6 @@
 package com.t4kash.api.identity.controller;
 
+import com.t4kash.api.exception.ForbiddenOperationException;
 import com.t4kash.api.exception.InvalidCredentialsException;
 import com.t4kash.api.identity.dto.*;
 import com.t4kash.api.identity.service.AuthSessionService;
@@ -143,13 +144,39 @@ public class AuthController {
         return request.getRemoteAddr();
     }
 
+    /**
+     * Registra el token FCM del dispositivo para la cuenta de la sesion. El
+     * usuario sale siempre del token de sesion, nunca de un id enviado por el
+     * cliente.
+     */
+    @PutMapping("/me/fcm-token")
+    public ResponseEntity<Void> updateMyFcmToken(
+            @CurrentUser AuthenticatedUserResponse user,
+            @Valid @RequestBody FcmTokenRequest request
+    ) {
+        authSessionService.actualizarTokenFirebase(user.idUsuario(), request.getToken());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Ruta anterior, conservada para las apps ya instaladas. Exige sesion y
+     * solo acepta el id de la propia cuenta.
+     *
+     * @deprecated usar {@code PUT /api/auth/me/fcm-token}.
+     */
+    @Deprecated
     @PutMapping("/{id}/fcm-token")
     public ResponseEntity<Void> updateFcmToken(
+            @CurrentUser AuthenticatedUserResponse user,
             @PathVariable Long id,
-            @RequestBody FcmTokenRequest request) {
-
-        authSessionService.actualizarTokenFirebase(id, request.getToken());
-
-        return ResponseEntity.ok().build();
+            @Valid @RequestBody FcmTokenRequest request
+    ) {
+        if (id == null || id.longValue() != user.idUsuario().longValue()) {
+            throw new ForbiddenOperationException(
+                    "Solo puedes registrar el token de tu propia cuenta."
+            );
+        }
+        authSessionService.actualizarTokenFirebase(user.idUsuario(), request.getToken());
+        return ResponseEntity.noContent().build();
     }
 }
