@@ -1,24 +1,33 @@
 package com.t4kash.api;
 
+import com.t4kash.api.identity.service.VerificationEmailService;
 import com.t4kash.api.network.entity.Publicacion;
 import com.t4kash.api.network.repository.PublicacionRepository;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -51,6 +60,9 @@ class ApiPostgresqlIntegrationTest {
     @Autowired
     private PublicacionRepository publicationRepository;
 
+    @MockitoBean
+    private VerificationEmailService emailService;
+
     @Test
     void bootsWithTheProductionSchemaAndExposesHealth() throws Exception {
         Integer tableCount = jdbcTemplate.queryForObject(
@@ -63,10 +75,54 @@ class ApiPostgresqlIntegrationTest {
                 Integer.class
         );
 
-        assertThat(tableCount).isEqualTo(52);
+        assertThat(tableCount).isEqualTo(54);
         mockMvc.perform(get("/api/health"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UP"));
+    }
+
+    @Test
+    void registersVerifiesAndLogsInAgainstTheProductionSchema() throws Exception {
+        String correo = "registro.flujo@gmail.com";
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nombre":"Ana","apellido":"Flujo","correo":"%s","password":"Clave12345"}
+                                """.formatted(correo)))
+                .andExpect(status().isCreated());
+
+        ArgumentCaptor<String> registrationCode = ArgumentCaptor.forClass(String.class);
+        verify(emailService).sendCode(eq(correo), registrationCode.capture(), anyInt());
+        mockMvc.perform(post("/api/auth/verify-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"correo":"%s","codigo":"%s"}
+                                """.formatted(correo, registrationCode.getValue())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").isNotEmpty());
+
+        UUID publicId = jdbcTemplate.queryForObject(
+                "SELECT uuid_publico FROM usuarios WHERE correo = ?",
+                UUID.class,
+                correo
+        );
+        assertThat(publicId).isNotNull();
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"correo":"%s","password":"Clave12345"}
+                                """.formatted(correo)))
+                .andExpect(status().isOk());
+        ArgumentCaptor<String> loginCode = ArgumentCaptor.forClass(String.class);
+        verify(emailService).sendLoginCode(eq(correo), loginCode.capture(), anyInt());
+        mockMvc.perform(post("/api/auth/login/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"correo":"%s","codigo":"%s"}
+                                """.formatted(correo, loginCode.getValue())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").isNotEmpty());
     }
 
     @Test

@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
@@ -47,6 +48,18 @@ public class Usuario {
 
     @Column(name = "fcm_token", length = 255)
     private String fcmToken;
+
+    /**
+     * Hibernate envia la columna aunque valga null, asi que el DEFAULT
+     * gen_random_uuid() de PostgreSQL nunca se aplica. Se genera aqui para que
+     * el registro no viole la restriccion NOT NULL de uuid_publico.
+     */
+    @PrePersist
+    void asignarUuidPublico() {
+        if (uuidPublico == null) {
+            uuidPublico = UUID.randomUUID();
+        }
+    }
 
     public Integer getIdUsuario() {
         return idUsuario;
