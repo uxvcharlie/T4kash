@@ -17,6 +17,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,17 +34,27 @@ import androidx.compose.ui.unit.dp
 import com.t4kash.app.R
 import com.t4kash.app.ui.components.StatusChip
 import com.t4kash.app.ui.components.T4PatternSurface
+import com.t4kash.app.ui.service.RetrofitClient
 import com.t4kash.app.ui.theme.T4BrandDark
 import com.t4kash.app.ui.theme.T4Mint
 import com.t4kash.app.ui.theme.T4Surface
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 
 @Composable
 fun SplashScreen(
     onFinished: () -> Unit
 ) {
+    var wakingServer by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
+        val warmUp = async { RetrofitClient.warmUp() }
         delay(1400)
+        if (!warmUp.isCompleted) {
+            // El API estaba dormido: se avisa en lugar de dejar la pantalla congelada.
+            wakingServer = true
+        }
+        warmUp.await()
         onFinished()
     }
 
@@ -122,9 +136,15 @@ fun SplashScreen(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "Preparando tu espacio...",
+                    text = if (wakingServer) {
+                        "Despertando el servidor...\nLa primera conexión puede tardar hasta un minuto."
+                    } else {
+                        "Preparando tu espacio..."
+                    },
                     color = Color.White.copy(alpha = 0.78f),
-                    style = MaterialTheme.typography.labelSmall
+                    style = MaterialTheme.typography.labelSmall,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 32.dp)
                 )
             }
         }

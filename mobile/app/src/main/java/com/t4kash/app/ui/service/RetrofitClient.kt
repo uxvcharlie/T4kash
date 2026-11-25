@@ -1,7 +1,10 @@
 package com.t4kash.app.ui.service
 
 import com.t4kash.app.BuildConfig
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.logging.HttpLoggingInterceptor
 import com.t4kash.app.ui.session.UserSession
 import retrofit2.Retrofit
@@ -47,6 +50,26 @@ object RetrofitClient {
         }
         .addInterceptor(loggingInterceptor)
         .build()
+
+    /**
+     * Render (plan gratis) apaga el API tras unos minutos sin uso y tarda en
+     * volver. Esta llamada usa un limite mas largo que el resto (90 s) para que
+     * el arranque en frio ocurra en la pantalla de inicio y no en la primera
+     * pantalla real. Devuelve false si el API no respondio; las pantallas
+     * siguientes muestran su propio error.
+     */
+    suspend fun warmUp(): Boolean = withContext(Dispatchers.IO) {
+        val client = httpClient.newBuilder()
+            .readTimeout(90, TimeUnit.SECONDS)
+            .callTimeout(90, TimeUnit.SECONDS)
+            .build()
+        val request = Request.Builder().url(baseUrl + "health").get().build()
+        try {
+            client.newCall(request).execute().use { it.isSuccessful }
+        } catch (e: Exception) {
+            false
+        }
+    }
 
     private val retrofit: Retrofit by lazy {
         Retrofit.Builder()
